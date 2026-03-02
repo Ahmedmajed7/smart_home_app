@@ -17,72 +17,65 @@ import com.thingclips.smart.sdk.api.IResultCallback
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.lang.ref.WeakReference
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.lang.reflect.Proxy
 
 object TuyaBridge {
 
     private const val TAG = "TuyaBridge"
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // ---------- Activity holder ----------
     private var activityRef: WeakReference<Activity>? = null
-
-    @JvmStatic
-    fun bindActivity(activity: Activity) {
-        activityRef = WeakReference(activity)
-    }
-
-    @JvmStatic
-    fun unbindActivity(activity: Activity) {
-        val cur = activityRef?.get()
-        if (cur === activity) activityRef = null
-    }
-
-    private val currentActivity: Activity?
-        get() = activityRef?.get()
-
-    // ---------- Channel holder (optional events) ----------
     private var channel: MethodChannel? = null
+
+    @JvmStatic fun bindActivity(activity: Activity) { activityRef = WeakReference(activity) }
+    @JvmStatic fun unbindActivity(activity: Activity) { if (activityRef?.get() === activity) activityRef = null }
+    private val currentActivity: Activity? get() = activityRef?.get()
 
     @JvmStatic
     fun setChannel(ch: MethodChannel) {
         channel = ch
     }
 
-    // ==========================================================
-    // Public entry point from MainActivity
-    // ==========================================================
+    private fun emit(event: String, args: Any? = null) {
+        try { channel?.invokeMethod(event, args) } catch (_: Throwable) {}
+    }
+
     @JvmStatic
     fun handle(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
 
-                // ---------------- Core ----------------
-                "initSdk" -> result.success(true)
+                "initSdk" -> {
+                    Log.d(TAG, "initSdk()")
+                    result.success(true)
+                }
 
-                "isLoggedIn" -> result.success(ThingHomeSdk.getUserInstance().isLogin)
+                "isLoggedIn" -> {
+                    val logged = ThingHomeSdk.getUserInstance().isLogin
+                    Log.d(TAG, "isLoggedIn() => $logged")
+                    result.success(logged)
+                }
 
-                // ---------------- Auth (Email) ----------------
+                // ---------------- AUTH ----------------
                 "loginByEmail" -> {
                     val countryCode = call.argument<String>("countryCode") ?: ""
                     val email = call.argument<String>("email") ?: ""
                     val password = call.argument<String>("password") ?: ""
 
+                    Log.d(TAG, "➡️ loginByEmail(country=$countryCode, email=$email)")
+
                     ThingHomeSdk.getUserInstance().loginWithEmail(
-                        countryCode,
-                        email,
-                        password,
+                        countryCode, email, password,
                         object : ILoginCallback {
                             override fun onSuccess(user: User?) {
-                                // IMPORTANT for BizBundle:
-                                // Some builds require calling wrapper onLogin AFTER login.
+                                Log.d(TAG, "✅ loginByEmail success user=${user?.uid}")
                                 tryCallWrapperOnLogin()
-                                result.success(true)
+                                mainHandler.post { result.success(true) }
                             }
 
                             override fun onError(code: String?, error: String?) {
-                                result.error(code ?: "LOGIN_FAILED", error ?: "login failed", null)
+                                Log.e(TAG, "❌ loginByEmail error code=$code msg=$error")
+                                mainHandler.post { result.error(code ?: "LOGIN_FAILED", error ?: "login failed", null) }
                             }
                         }
                     )
@@ -93,15 +86,18 @@ object TuyaBridge {
                     val email = call.argument<String>("email") ?: ""
                     val type = call.argument<Int>("type") ?: 1
 
+                    Log.d(TAG, "➡️ sendEmailCode(country=$countryCode, email=$email, type=$type)")
+
                     ThingHomeSdk.getUserInstance().sendVerifyCodeWithUserName(
-                        email,
-                        "",
-                        countryCode,
-                        type,
+                        email, "", countryCode, type,
                         object : IResultCallback {
-                            override fun onSuccess() = result.success(true)
+                            override fun onSuccess() {
+                                Log.d(TAG, "✅ sendEmailCode success")
+                                mainHandler.post { result.success(true) }
+                            }
                             override fun onError(code: String?, error: String?) {
-                                result.error(code ?: "SEND_CODE_FAILED", error ?: "send code failed", null)
+                                Log.e(TAG, "❌ sendEmailCode error code=$code msg=$error")
+                                mainHandler.post { result.error(code ?: "SEND_CODE_FAILED", error ?: "send code failed", null) }
                             }
                         }
                     )
@@ -113,41 +109,45 @@ object TuyaBridge {
                     val password = call.argument<String>("password") ?: ""
                     val code = call.argument<String>("code") ?: ""
 
+                    Log.d(TAG, "➡️ registerEmail(country=$countryCode, email=$email)")
+
                     ThingHomeSdk.getUserInstance().registerAccountWithEmail(
-                        countryCode,
-                        email,
-                        password,
-                        code,
+                        countryCode, email, password, code,
                         object : IRegisterCallback {
                             override fun onSuccess(user: User?) {
+                                Log.d(TAG, "✅ registerEmail success user=${user?.uid}")
                                 tryCallWrapperOnLogin()
-                                result.success(true)
+                                mainHandler.post { result.success(true) }
                             }
-
                             override fun onError(code: String?, error: String?) {
-                                result.error(code ?: "REGISTER_FAILED", error ?: "register failed", null)
+                                Log.e(TAG, "❌ registerEmail error code=$code msg=$error")
+                                mainHandler.post { result.error(code ?: "REGISTER_FAILED", error ?: "register failed", null) }
                             }
                         }
                     )
                 }
 
                 "logout" -> {
+                    Log.d(TAG, "➡️ logout()")
                     ThingHomeSdk.getUserInstance().logout(object : ILogoutCallback {
                         override fun onSuccess() {
+                            Log.d(TAG, "✅ logout success")
                             tryCallWrapperOnLogout()
-                            result.success(true)
+                            mainHandler.post { result.success(true) }
                         }
-
                         override fun onError(code: String?, error: String?) {
-                            result.error(code ?: "LOGOUT_FAILED", error ?: "logout failed", null)
+                            Log.e(TAG, "❌ logout error code=$code msg=$error")
+                            mainHandler.post { result.error(code ?: "LOGOUT_FAILED", error ?: "logout failed", null) }
                         }
                     })
                 }
 
-                // ---------------- Home ----------------
+                // ---------------- HOME ----------------
                 "getHomeList" -> {
+                    Log.d(TAG, "➡️ getHomeList()")
                     ThingHomeSdk.getHomeManagerInstance().queryHomeList(object : IThingGetHomeListCallback {
                         override fun onSuccess(homeBeans: MutableList<HomeBean>?) {
+                            Log.d(TAG, "✅ getHomeList success size=${homeBeans?.size ?: 0}")
                             val list = (homeBeans ?: mutableListOf()).map { hb ->
                                 hashMapOf<String, Any?>(
                                     "homeId" to hb.homeId,
@@ -155,11 +155,12 @@ object TuyaBridge {
                                     "geoName" to hb.geoName
                                 )
                             }
-                            result.success(list)
+                            mainHandler.post { result.success(list) }
                         }
 
                         override fun onError(errorCode: String?, error: String?) {
-                            result.error(errorCode ?: "HOME_LIST_FAILED", error ?: "queryHomeList failed", null)
+                            Log.e(TAG, "❌ getHomeList error code=$errorCode msg=$error")
+                            mainHandler.post { result.error(errorCode ?: "HOME_LIST_FAILED", error ?: "queryHomeList failed", null) }
                         }
                     })
                 }
@@ -169,64 +170,72 @@ object TuyaBridge {
                     val geoName = call.argument<String>("geoName") ?: "Oman"
                     val rooms = call.argument<List<String>>("rooms") ?: listOf("Living Room")
 
+                    Log.d(TAG, "➡️ ensureHome(name=$name geo=$geoName rooms=${rooms.size})")
+
                     ThingHomeSdk.getHomeManagerInstance().queryHomeList(object : IThingGetHomeListCallback {
                         override fun onSuccess(homeBeans: MutableList<HomeBean>?) {
                             val existing = homeBeans?.firstOrNull()
                             if (existing != null) {
-                                result.success(
-                                    hashMapOf<String, Any?>(
-                                        "homeId" to existing.homeId,
-                                        "name" to existing.name,
-                                        "geoName" to existing.geoName
+                                mainHandler.post {
+                                    result.success(
+                                        hashMapOf<String, Any?>(
+                                            "homeId" to existing.homeId,
+                                            "name" to existing.name,
+                                            "geoName" to existing.geoName
+                                        )
                                     )
-                                )
+                                }
                                 return
                             }
 
                             ThingHomeSdk.getHomeManagerInstance().createHome(
-                                name,
-                                0.0,
-                                0.0,
-                                geoName,
-                                rooms,
+                                name, 0.0, 0.0, geoName, rooms,
                                 object : IThingHomeResultCallback {
                                     override fun onSuccess(bean: HomeBean?) {
                                         if (bean == null) {
-                                            result.error("CREATE_HOME_FAILED", "HomeBean is null", null)
+                                            mainHandler.post { result.error("CREATE_HOME_FAILED", "HomeBean is null", null) }
                                             return
                                         }
-                                        result.success(
-                                            hashMapOf<String, Any?>(
-                                                "homeId" to bean.homeId,
-                                                "name" to bean.name,
-                                                "geoName" to bean.geoName
+                                        mainHandler.post {
+                                            result.success(
+                                                hashMapOf<String, Any?>(
+                                                    "homeId" to bean.homeId,
+                                                    "name" to bean.name,
+                                                    "geoName" to bean.geoName
+                                                )
                                             )
-                                        )
+                                        }
                                     }
 
                                     override fun onError(errorCode: String?, errorMsg: String?) {
-                                        result.error(errorCode ?: "CREATE_HOME_FAILED", errorMsg ?: "createHome failed", null)
+                                        mainHandler.post {
+                                            result.error(errorCode ?: "CREATE_HOME_FAILED", errorMsg ?: "createHome failed", null)
+                                        }
                                     }
                                 }
                             )
                         }
 
                         override fun onError(errorCode: String?, error: String?) {
-                            result.error(errorCode ?: "HOME_LIST_FAILED", error ?: "queryHomeList failed", null)
+                            mainHandler.post { result.error(errorCode ?: "HOME_LIST_FAILED", error ?: "queryHomeList failed", null) }
                         }
                     })
                 }
 
-                // ---------------- BizBundle context (CRITICAL) ----------------
+                // ---------------- BIZ CONTEXT ----------------
                 "ensureBizContext" -> {
                     val homeId = (call.argument<Number>("homeId") ?: 0).toLong()
+                    if (!ThingHomeSdk.getUserInstance().isLogin) {
+                        result.error("NOT_LOGGED_IN", "Login required before ensureBizContext", null)
+                        return
+                    }
                     ensureBizContext(homeId) { ok, err ->
-                        if (ok) result.success(true)
-                        else result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null)
+                        if (ok) mainHandler.post { result.success(true) }
+                        else mainHandler.post { result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null) }
                     }
                 }
 
-                // ---------------- BizBundle UI ----------------
+                // ---------------- BIZ UI ----------------
                 "bizOpenAddDevice" -> {
                     val activity = currentActivity ?: run {
                         result.error("NO_ACTIVITY", "No foreground Activity available", null)
@@ -234,16 +243,21 @@ object TuyaBridge {
                     }
                     val homeId = (call.argument<Number>("homeId") ?: 0).toLong()
 
+                    if (!ThingHomeSdk.getUserInstance().isLogin) {
+                        result.error("NOT_LOGGED_IN", "Login required", null)
+                        return
+                    }
+
                     ensureBizContext(homeId) { ok, err ->
                         if (!ok) {
-                            result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null)
+                            mainHandler.post { result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null) }
                             return@ensureBizContext
                         }
                         BizBundleActivatorUi.openAddDevice(
                             activity = activity,
                             homeId = homeId,
-                            onOk = { result.success(true) },
-                            onErr = { t -> result.error("ADD_DEVICE_UI_FAILED", t.message, null) }
+                            onOk = { mainHandler.post { result.success(true) } },
+                            onErr = { t -> mainHandler.post { result.error("ADD_DEVICE_UI_FAILED", t.message, null) } }
                         )
                     }
                 }
@@ -255,37 +269,42 @@ object TuyaBridge {
                     }
                     val homeId = (call.argument<Number>("homeId") ?: 0).toLong()
 
+                    if (!ThingHomeSdk.getUserInstance().isLogin) {
+                        result.error("NOT_LOGGED_IN", "Login required", null)
+                        return
+                    }
+
                     ensureBizContext(homeId) { ok, err ->
                         if (!ok) {
-                            result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null)
+                            mainHandler.post { result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null) }
                             return@ensureBizContext
                         }
                         mainHandler.post {
                             try {
-                                // Official working class in your build:
                                 val scanClazz = Class.forName("com.thingclips.smart.activator.scan.qrcode.ScanManager")
                                 val instance = scanClazz.getDeclaredField("INSTANCE").get(null)
 
                                 // Prefer openScan(Context, Bundle)
-                                val m2 = scanClazz.methods.firstOrNull {
-                                    it.name == "openScan" && it.parameterTypes.size == 2
+                                val openWithBundle = scanClazz.methods.firstOrNull { m ->
+                                    m.name == "openScan" && m.parameterTypes.size == 2
                                 }
-                                if (m2 != null) {
-                                    val bundle = Bundle().apply {
+                                if (openWithBundle != null) {
+                                    val b = Bundle().apply {
+                                        // best-effort extras
                                         putLong("homeId", homeId)
-                                        putString("homeName", lastHomeName ?: "")
+                                        putLong("relationId", homeId)
                                     }
-                                    m2.invoke(instance, activity /* Context */, bundle)
+                                    openWithBundle.invoke(instance, activity /* Context */, b)
                                     result.success(true)
                                     return@post
                                 }
 
                                 // Fallback openScan(Context)
-                                val m1 = scanClazz.methods.firstOrNull {
-                                    it.name == "openScan" && it.parameterTypes.size == 1
+                                val open = scanClazz.methods.firstOrNull { m ->
+                                    m.name == "openScan" && m.parameterTypes.size == 1
                                 } ?: throw NoSuchMethodException("ScanManager.openScan(Context/*,Bundle*/) not found")
 
-                                m1.invoke(instance, activity /* Context */)
+                                open.invoke(instance, activity /* Context */)
                                 result.success(true)
                             } catch (t: Throwable) {
                                 Log.e(TAG, "bizOpenQrScan failed", t)
@@ -298,203 +317,172 @@ object TuyaBridge {
                 else -> result.notImplemented()
             }
         } catch (t: Throwable) {
-            Log.e(TAG, "Bridge handler crash prevented", t)
+            Log.e(TAG, "Bridge crash prevented", t)
             result.error("NATIVE_BRIDGE_ERROR", t.message, null)
         }
     }
 
-    // ==========================================================
-    // Internal: ensure BizBundle has CURRENT HOME (official logic)
-    // ==========================================================
-    private var lastHomeName: String? = null
-
+    // ------------------------------------------------------------
+    // Biz context helpers
+    // ------------------------------------------------------------
     private fun ensureBizContext(homeId: Long, done: (Boolean, String?) -> Unit) {
         Log.d(TAG, "➡️ ensureBizContext(homeId=$homeId)")
 
-        // 1) Warm home detail (your logs show this works)
+        if (homeId <= 0L) {
+            done(false, "BAD_HOME_ID")
+            return
+        }
+
+        // warm home detail (async) then shift family/current home
         warmHomeDetail(homeId) { ok, nameOrErr ->
             if (!ok) {
-                done(false, nameOrErr)
+                done(false, nameOrErr ?: "HOME_DETAIL_FAILED")
                 return@warmHomeDetail
             }
-            val homeName = nameOrErr ?: ""
-            lastHomeName = homeName
+
+            val homeName = (nameOrErr ?: "Home").ifBlank { "Home" }
             Log.d(TAG, "✅ warmHomeDetail OK homeId=$homeId name=$homeName")
 
-            // 2) Official: MicroServiceManager + AbsBizBundleFamilyService shiftCurrentFamily
-            val shifted = tryShiftCurrentFamily(homeId, homeName)
-            if (!shifted) {
-                // If you don’t add the family dependency, this will stay false and QR will keep failing.
-                done(false, "Family service not available. Ensure you added thingsmart-bizbundle-family dependency.")
-                return@warmHomeDetail
-            }
+            // ✅ This is the key piece for relationId/token issues in BizBundle QR flow (best-effort).
+            BizBundleFamilyServiceImpl.setHome(homeId, homeName)
 
-            done(true, null)
+            // ✅ Also push home into activator manager if available (best-effort)
+            setActivatorHomeIdBestEffort(homeId)
+
+            // Optional: try to warm token inside activator module (best-effort)
+            getActivatorTokenBestEffort(homeId) { tokenLen ->
+                Log.d(TAG, "✅ ensureBizContext ready. tokenLen=$tokenLen")
+                done(true, null)
+            }
         }
     }
 
     private fun warmHomeDetail(homeId: Long, cb: (Boolean, String?) -> Unit) {
         try {
-            val latch = CountDownLatch(1)
-            var ok = false
-            var name: String? = null
-            var err: String? = null
+            // run on main thread to reduce weird SDK thread timing issues
+            mainHandler.post {
+                ThingHomeSdk.newHomeInstance(homeId).getHomeDetail(object : IThingHomeResultCallback {
+                    override fun onSuccess(bean: HomeBean?) {
+                        cb(true, bean?.name ?: "")
+                    }
 
-            ThingHomeSdk.newHomeInstance(homeId).getHomeDetail(object : IThingHomeResultCallback {
-                override fun onSuccess(bean: HomeBean?) {
-                    ok = true
-                    name = bean?.name ?: ""
-                    latch.countDown()
-                }
-
-                override fun onError(errorCode: String?, errorMsg: String?) {
-                    ok = false
-                    err = "${errorCode ?: "HOME_DETAIL_FAILED"}: ${errorMsg ?: "getHomeDetail failed"}"
-                    latch.countDown()
-                }
-            })
-
-            // Small wait so we don't race opening BizBundle UI immediately.
-            val completed = latch.await(2500, TimeUnit.MILLISECONDS)
-            if (!completed) {
-                cb(false, "HOME_DETAIL_TIMEOUT")
-            } else {
-                cb(ok, if (ok) name else err)
+                    override fun onError(errorCode: String?, errorMsg: String?) {
+                        cb(false, "${errorCode ?: "HOME_DETAIL_FAILED"}: ${errorMsg ?: "getHomeDetail failed"}")
+                    }
+                })
             }
         } catch (t: Throwable) {
             cb(false, t.message)
         }
     }
 
-    /**
-     * Official docs:
-     * AbsBizBundleFamilyService service = MicroServiceManager.getInstance()
-     *   .findServiceByInterface(AbsBizBundleFamilyService.class.getName());
-     * service.shiftCurrentFamily(homeId, homeName);
-     *
-     * We do it via reflection to avoid compile errors if dependency isn't added yet.
-     */
-    private fun tryShiftCurrentFamily(homeId: Long, homeName: String): Boolean {
+    private fun setActivatorHomeIdBestEffort(homeId: Long) {
+        // We discovered earlier the real manager in your APK build was:
+        // com.thingclips.smart.activator.plug.mesosphere.ThingDeviceActivatorManager
+        val mgrCandidates = listOf(
+            "com.thingclips.smart.activator.plug.mesosphere.ThingDeviceActivatorManager",
+            "com.tuya.smart.activator.plug.mesosphere.ThingDeviceActivatorManager"
+        )
+
+        for (cn in mgrCandidates) {
+            try {
+                val clz = Class.forName(cn)
+                val instance = runCatching { clz.getDeclaredField("INSTANCE").get(null) }.getOrNull() ?: continue
+                val m = clz.methods.firstOrNull { mm ->
+                    mm.name == "setHomeId" && mm.parameterTypes.size == 1 &&
+                        (mm.parameterTypes[0] == java.lang.Long.TYPE || mm.parameterTypes[0] == java.lang.Long::class.java)
+                } ?: continue
+
+                m.invoke(instance, homeId)
+                Log.d(TAG, "✅ ActivatorManager.setHomeId($homeId) via $cn")
+                return
+            } catch (_: Throwable) {
+                // try next
+            }
+        }
+
+        Log.w(TAG, "⚠️ ActivatorManager.setHomeId not found (not fatal).")
+    }
+
+    private fun getActivatorTokenBestEffort(homeId: Long, done: (Int) -> Unit) {
         try {
-            val microServiceManagerClazzNames = listOf(
-                // Tuya older
-                "com.tuya.smart.android.common.utils.MicroServiceManager",
-                // Thingclips builds often expose this:
-                "com.thingclips.smart.android.common.utils.MicroServiceManager",
-                // Framework (your logs show MicroServiceManagerImpl; facade is often here)
-                "com.thingclips.smart.framework.service.MicroServiceManager"
-            )
-
-            val microClazz = microServiceManagerClazzNames.firstNotNullOfOrNull { name ->
-                runCatching { Class.forName(name) }.getOrNull()
-            } ?: run {
-                Log.w(TAG, "⚠️ MicroServiceManager not found in app classpath.")
-                return false
+            // ThingHomeSdk.getActivatorInstance()?.getActivatorToken(long, IThingActivatorGetToken)
+            val getActInst = ThingHomeSdk::class.java.methods.firstOrNull { it.name == "getActivatorInstance" && it.parameterTypes.isEmpty() }
+            val actInst = getActInst?.invoke(null)
+            if (actInst == null) {
+                done(0)
+                return
             }
 
-            val getInstance = microClazz.methods.firstOrNull { it.name == "getInstance" && it.parameterTypes.isEmpty() }
-                ?: run {
-                    Log.w(TAG, "⚠️ MicroServiceManager.getInstance() not found.")
-                    return false
+            val m = actInst.javaClass.methods.firstOrNull { mm ->
+                mm.name == "getActivatorToken" && mm.parameterTypes.size == 2 &&
+                    (mm.parameterTypes[0] == java.lang.Long.TYPE || mm.parameterTypes[0] == java.lang.Long::class.java) &&
+                    mm.parameterTypes[1].isInterface
+            } ?: run {
+                done(0)
+                return
+            }
+
+            val cbInterface = m.parameterTypes[1]
+            val proxy = Proxy.newProxyInstance(cbInterface.classLoader, arrayOf(cbInterface)) { _, method, args ->
+                // Most builds use onSuccess(String token) / onFailure(String code, String msg)
+                if (method.name.equals("onSuccess", ignoreCase = true)) {
+                    val token = args?.firstOrNull() as? String
+                    Log.d(TAG, "✅ getActivatorToken success len=${token?.length ?: 0}")
+                    done(token?.length ?: 0)
+                    return@newProxyInstance null
                 }
-
-            val msm = getInstance.invoke(null) ?: run {
-                Log.w(TAG, "⚠️ MicroServiceManager.getInstance() returned null.")
-                return false
+                if (method.name.contains("onFail", ignoreCase = true) || method.name.equals("onError", ignoreCase = true)) {
+                    Log.w(TAG, "⚠️ getActivatorToken failed: ${args?.toList()}")
+                    done(0)
+                    return@newProxyInstance null
+                }
+                null
             }
 
-            // We need the AbsBizBundleFamilyService class name string
-            // In most BizBundle builds it is resolvable by simple name via the service manager.
-            val absFamilyCandidates = listOf(
-                "com.thingclips.smart.bizbundle.family.api.AbsBizBundleFamilyService",
-                "com.tuya.smart.bizbundle.family.api.AbsBizBundleFamilyService",
-                // Some older docs omit package; manager usually uses full name, but keep candidates.
-                "AbsBizBundleFamilyService"
-            )
-
-            // Prefer: use Class.forName to get canonical name
-            val absFamilyClazz = absFamilyCandidates.firstNotNullOfOrNull { n ->
-                runCatching { Class.forName(n) }.getOrNull()
-            }
-
-            val familyInterfaceName = absFamilyClazz?.name ?: run {
-                // If the class can't be loaded, we still can try by known interface name strings
-                // but in practice: you must add thingsmart-bizbundle-family.
-                Log.w(TAG, "⚠️ AbsBizBundleFamilyService class not found. Add thingsmart-bizbundle-family.")
-                return false
-            }
-
-            val findSvc = msm.javaClass.methods.firstOrNull {
-                it.name == "findServiceByInterface" && it.parameterTypes.size == 1 && it.parameterTypes[0] == String::class.java
-            } ?: run {
-                Log.w(TAG, "⚠️ MicroServiceManager.findServiceByInterface(String) not found.")
-                return false
-            }
-
-            val service = findSvc.invoke(msm, familyInterfaceName)
-            if (service == null) {
-                Log.w(TAG, "⚠️ Family service not registered yet (service=null).")
-                return false
-            }
-
-            // Call shiftCurrentFamily(long,String) if exists (preferred)
-            val shift = service.javaClass.methods.firstOrNull {
-                it.name == "shiftCurrentFamily" && it.parameterTypes.size == 2 &&
-                        (it.parameterTypes[0] == java.lang.Long.TYPE || it.parameterTypes[0] == java.lang.Long::class.java) &&
-                        it.parameterTypes[1] == String::class.java
-            }
-            if (shift != null) {
-                shift.invoke(service, homeId, homeName)
-                Log.d(TAG, "✅ shiftCurrentFamily($homeId, $homeName) OK")
-            }
-
-            // Also call setCurrentHomeId(long) if exists (some builds rely on it)
-            val setHomeId = service.javaClass.methods.firstOrNull {
-                it.name == "setCurrentHomeId" && it.parameterTypes.size == 1 &&
-                        (it.parameterTypes[0] == java.lang.Long.TYPE || it.parameterTypes[0] == java.lang.Long::class.java)
-            }
-            if (setHomeId != null) {
-                setHomeId.invoke(service, homeId)
-                Log.d(TAG, "✅ setCurrentHomeId($homeId) OK")
-            }
-
-            return true
+            Log.d(TAG, "➡️ Invoking getActivatorToken($homeId, cb) on ${actInst.javaClass.name}")
+            m.invoke(actInst, homeId, proxy)
         } catch (t: Throwable) {
-            Log.e(TAG, "tryShiftCurrentFamily failed", t)
-            return false
+            Log.w(TAG, "⚠️ getActivatorToken best-effort failed: ${t.message}")
+            done(0)
         }
     }
 
+    // ------------------------------------------------------------
+    // Wrapper hooks (best effort)
+    // ------------------------------------------------------------
     private fun tryCallWrapperOnLogin() {
-        // Official docs: TuyaWrapper.onLogin() after login
-        val wrappers = listOf(
-            "com.tuya.smart.wrapper.TuyaWrapper",
-            "com.thingclips.smart.wrapper.ThingWrapper",
-            "com.thingclips.smart.wrapper.TuyaWrapper"
+        val candidates = listOf(
+            "com.thingclips.smart.bizbundle.TuyaWrapper",
+            "com.thingclips.smart.android.bizbundle.TuyaWrapper",
+            "com.tuya.smart.bizbundle.TuyaWrapper",
+            "com.tuya.smart.android.bizbundle.TuyaWrapper"
         )
         try {
-            val w = wrappers.firstNotNullOfOrNull { runCatching { Class.forName(it) }.getOrNull() } ?: return
-            val m = w.methods.firstOrNull { it.name == "onLogin" && it.parameterTypes.isEmpty() } ?: return
+            val clz = candidates.firstNotNullOfOrNull { cn -> runCatching { Class.forName(cn) }.getOrNull() } ?: return
+            val m = clz.methods.firstOrNull { it.name == "onLogin" && it.parameterTypes.isEmpty() } ?: return
             m.invoke(null)
-            Log.d(TAG, "✅ Wrapper.onLogin() called")
-        } catch (_: Throwable) {
+            Log.d(TAG, "✅ TuyaWrapper.onLogin() called")
+        } catch (t: Throwable) {
+            Log.w(TAG, "⚠️ TuyaWrapper.onLogin failed: ${t.message}")
         }
     }
 
     private fun tryCallWrapperOnLogout() {
-        // Official docs: TuyaWrapper.onLogout(context)
-        val wrappers = listOf(
-            "com.tuya.smart.wrapper.TuyaWrapper",
-            "com.thingclips.smart.wrapper.ThingWrapper",
-            "com.thingclips.smart.wrapper.TuyaWrapper"
+        val candidates = listOf(
+            "com.thingclips.smart.bizbundle.TuyaWrapper",
+            "com.thingclips.smart.android.bizbundle.TuyaWrapper",
+            "com.tuya.smart.bizbundle.TuyaWrapper",
+            "com.tuya.smart.android.bizbundle.TuyaWrapper"
         )
         try {
-            val w = wrappers.firstNotNullOfOrNull { runCatching { Class.forName(it) }.getOrNull() } ?: return
-            val m = w.methods.firstOrNull { it.name == "onLogout" && it.parameterTypes.size == 1 } ?: return
+            val clz = candidates.firstNotNullOfOrNull { cn -> runCatching { Class.forName(cn) }.getOrNull() } ?: return
+            val m = clz.methods.firstOrNull { it.name == "onLogout" && it.parameterTypes.size == 1 } ?: return
             val ctx = currentActivity?.applicationContext ?: return
             m.invoke(null, ctx)
-            Log.d(TAG, "✅ Wrapper.onLogout(ctx) called")
-        } catch (_: Throwable) {
+            Log.d(TAG, "✅ TuyaWrapper.onLogout(ctx) called")
+        } catch (t: Throwable) {
+            Log.w(TAG, "⚠️ TuyaWrapper.onLogout failed: ${t.message}")
         }
     }
 }

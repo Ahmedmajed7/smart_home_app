@@ -2,12 +2,20 @@ package com.example.alrawi_app
 
 import android.app.Application
 import android.util.Log
+import com.facebook.drawee.backends.pipeline.Fresco
 import com.thingclips.smart.home.sdk.ThingHomeSdk
+import java.lang.reflect.Proxy
 
 class MainApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        try {
+            Fresco.initialize(this)
+        } catch (t: Throwable) {
+            Log.w(TAG, "⚠️ Fresco.init failed (continuing)", t)
+        }
 
         try {
             ThingHomeSdk.init(this)
@@ -44,25 +52,44 @@ class MainApplication : Application() {
                     return
                 }
 
-                // init(Application, Route, Service)
+                // init(Application, RouteEventListener, ServiceEventListener)
                 val init3 = initializerClass.methods.firstOrNull { m ->
-                    m.name == "init" && m.parameterTypes.size == 3 &&
+                    m.name == "init" &&
+                        m.parameterTypes.size == 3 &&
                         Application::class.java.isAssignableFrom(m.parameterTypes[0])
                 }
 
                 if (init3 != null) {
-                    // pass null listeners (safe)
-                    init3.invoke(null, this, null, null)
+                    val routeListenerType = init3.parameterTypes[1]
+                    val serviceListenerType = init3.parameterTypes[2]
+
+                    val routeListener = createLoggingProxy(routeListenerType, "RouteEventListener")
+                    val serviceListener = createLoggingProxy(serviceListenerType, "ServiceEventListener")
+
+                    init3.invoke(null, this, routeListener, serviceListener)
                     Log.d(TAG, "✅ BizBundle init OK via $className.init(Application, Route, Service)")
                     return
                 }
 
+                Log.w(TAG, "⚠️ Found $className but no matching init(...) signature")
             } catch (t: Throwable) {
-                Log.w(TAG, "BizBundle init failed for $className: ${t.message}")
+                Log.w(TAG, "BizBundle init failed for $className: ${t.javaClass.simpleName}: ${t.message}")
             }
         }
 
-        Log.e(TAG, "❌ BizBundle initializer not found.")
+        Log.e(TAG, "❌ BizBundle initializer not found. Activator may crash with 'Must call onCreate(application) first'")
+    }
+
+    private fun createLoggingProxy(iface: Class<*>, label: String): Any {
+        return Proxy.newProxyInstance(
+            iface.classLoader,
+            arrayOf(iface)
+        ) { _, method, args ->
+            if (method.name.contains("onFail", ignoreCase = true)) {
+                Log.e(TAG, "❌ $label callback: method=${method.name} args=${args?.toList()}")
+            }
+            null
+        }
     }
 
     companion object {
