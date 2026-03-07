@@ -1,3 +1,4 @@
+import '../models/things_device.dart';
 import '../tuya_platform.dart';
 
 class TuyaHome {
@@ -24,11 +25,8 @@ class TuyaHomeRepository {
   Future<List<TuyaHome>> getHomes() async {
     final list = await TuyaPlatform.getHomeList();
     return list.map((e) => TuyaHome.fromMap(e)).toList();
-    // TuyaPlatform.getHomeList() must return List<Map>
   }
 
-  /// Ensures there is at least one home, and returns the ensured home.
-  /// NOTE: Native ensureHome returns a Map {homeId, name, geoName}
   Future<TuyaHome> ensureHome({
     required String name,
     required String geoName,
@@ -40,5 +38,42 @@ class TuyaHomeRepository {
       rooms: rooms,
     );
     return TuyaHome.fromMap(map);
+  }
+
+  Future<List<ThingDevice>> getHomeDevices({
+    required int homeId,
+  }) async {
+    final list = await TuyaPlatform.getHomeDevices(homeId: homeId);
+
+    final devices = list
+        .map((e) => ThingDevice.fromMap(Map<String, dynamic>.from(e)))
+        .where((d) => d.devId.trim().isNotEmpty)
+        .toList();
+
+    devices.sort((a, b) {
+      if (a.isGateway != b.isGateway) {
+        return a.isGateway ? -1 : 1;
+      }
+      if (a.isOnline != b.isOnline) {
+        return a.isOnline ? -1 : 1;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    return devices;
+  }
+
+  Future<Map<dynamic, dynamic>> startGatewaySubDevicePairing({
+    required String gatewayDevId,
+    int timeoutSeconds = 120,
+  }) {
+    return TuyaPlatform.startGatewaySubDevicePairing(
+      gatewayDevId: gatewayDevId,
+      timeoutSeconds: timeoutSeconds,
+    );
+  }
+
+  Future<void> stopGatewaySubDevicePairing() {
+    return TuyaPlatform.stopGatewaySubDevicePairing();
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 
 class TuyaPlatform {
-  // ✅ Must match MainActivity.kt channel name
   static const MethodChannel _channel = MethodChannel('tuya_bridge');
 
   // -------------------------
@@ -69,7 +68,6 @@ class TuyaPlatform {
   // -------------------------
   // Home
   // -------------------------
-  /// Native returns: List<Map> [{homeId, name, geoName}, ...]
   static Future<List<Map<dynamic, dynamic>>> getHomeList() async {
     final res = await _channel.invokeMethod<dynamic>('getHomeList');
     if (res is List) {
@@ -78,7 +76,6 @@ class TuyaPlatform {
     return <Map<dynamic, dynamic>>[];
   }
 
-  /// Native returns: Map {homeId, name, geoName}
   static Future<Map<dynamic, dynamic>> ensureHome({
     required String name,
     required String geoName,
@@ -91,10 +88,24 @@ class TuyaPlatform {
     });
 
     if (res is Map) return Map<dynamic, dynamic>.from(res);
-    throw PlatformException(
+
+    throw  PlatformException(
       code: 'ENSURE_HOME_FAILED',
       message: 'ensureHome returned invalid result',
     );
+  }
+
+  static Future<List<Map<dynamic, dynamic>>> getHomeDevices({
+    required int homeId,
+  }) async {
+    final res = await _channel.invokeMethod<dynamic>('getHomeDevices', {
+      'homeId': homeId,
+    });
+
+    if (res is List) {
+      return res.map((e) => Map<dynamic, dynamic>.from(e as Map)).toList();
+    }
+    return <Map<dynamic, dynamic>>[];
   }
 
   // -------------------------
@@ -116,5 +127,32 @@ class TuyaPlatform {
     await _channel.invokeMethod('bizOpenQrScan', {
       'homeId': homeId,
     });
+  }
+
+  // -------------------------
+  // Gateway sub-device pairing
+  // -------------------------
+  static Future<Map<dynamic, dynamic>> startGatewaySubDevicePairing({
+    required String gatewayDevId,
+    int timeoutSeconds = 120,
+  }) async {
+    final res = await _channel.invokeMethod<dynamic>(
+      'startGatewaySubDevicePairing',
+      {
+        'gatewayDevId': gatewayDevId,
+        'timeoutSeconds': timeoutSeconds,
+      },
+    );
+
+    if (res is Map) return Map<dynamic, dynamic>.from(res);
+
+    throw  PlatformException(
+      code: 'SUB_DEVICE_PAIR_FAILED',
+      message: 'Native pairing returned invalid result',
+    );
+  }
+
+  static Future<void> stopGatewaySubDevicePairing() async {
+    await _channel.invokeMethod('stopGatewaySubDevicePairing');
   }
 }

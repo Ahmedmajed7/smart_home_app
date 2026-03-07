@@ -5,6 +5,9 @@ class ThingDevice {
   final bool isOnline;
   final bool isGateway;
   final String? parentId;
+  final String? productId;
+  final String? nodeId;
+  final String? category;
 
   const ThingDevice({
     required this.devId,
@@ -13,16 +16,30 @@ class ThingDevice {
     required this.isOnline,
     required this.isGateway,
     required this.parentId,
+    required this.productId,
+    required this.nodeId,
+    required this.category,
   });
 
+  bool get isSubDevice => parentId != null && parentId!.isNotEmpty;
+
   factory ThingDevice.fromMap(Map<String, dynamic> map) {
+    String? clean(dynamic value) {
+      final text = value?.toString().trim();
+      if (text == null || text.isEmpty || text == 'null') return null;
+      return text;
+    }
+
     return ThingDevice(
-      devId: (map['devId'] ?? '').toString(),
-      name: (map['name'] ?? '').toString(),
-      iconUrl: (map['iconUrl'] as String?)?.trim().isEmpty == true ? null : map['iconUrl'] as String?,
+      devId: clean(map['devId']) ?? '',
+      name: clean(map['name']) ?? 'Unnamed Device',
+      iconUrl: clean(map['iconUrl']),
       isOnline: map['isOnline'] == true,
       isGateway: map['isGateway'] == true,
-      parentId: (map['parentId'] as String?)?.trim().isEmpty == true ? null : map['parentId'] as String?,
+      parentId: clean(map['parentId']),
+      productId: clean(map['productId']),
+      nodeId: clean(map['nodeId']),
+      category: clean(map['category']),
     );
   }
 }
