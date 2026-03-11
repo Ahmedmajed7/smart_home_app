@@ -3,6 +3,7 @@ package com.example.alrawi_app
 import android.app.Application
 import android.util.Log
 import com.facebook.drawee.backends.pipeline.Fresco
+import com.facebook.soloader.SoLoader
 import com.thingclips.smart.home.sdk.ThingHomeSdk
 import java.lang.reflect.Proxy
 
@@ -11,10 +12,20 @@ class MainApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        Log.d(TAG, "🚀 App starting")
+
         try {
             Fresco.initialize(this)
+            Log.d(TAG, "✅ Fresco.init OK")
         } catch (t: Throwable) {
             Log.w(TAG, "⚠️ Fresco.init failed (continuing)", t)
+        }
+
+        try {
+            SoLoader.init(this, false)
+            Log.d(TAG, "✅ SoLoader.init OK")
+        } catch (t: Throwable) {
+            Log.w(TAG, "⚠️ SoLoader.init failed (continuing)", t)
         }
 
         try {
@@ -26,35 +37,40 @@ class MainApplication : Application() {
             return
         }
 
-        initBizBundleFramework()
+        initBizBundleReflectively()
+        registerBizBundleFamilyServiceReflectively()
+
+        Log.d(TAG, "✅ Application ready")
     }
 
-    private fun initBizBundleFramework() {
-        val wrapperCandidates = listOf(
-            "com.thingclips.smart.bizbundle.TuyaWrapper",
-            "com.thingclips.smart.android.bizbundle.TuyaWrapper",
-            "com.tuya.smart.bizbundle.TuyaWrapper",
-            "com.tuya.smart.android.bizbundle.TuyaWrapper"
-        )
-
-        val initializerCandidates = listOf(
+    private fun initBizBundleReflectively() {
+        val candidates = listOf(
             "com.thingclips.smart.bizbundle.initializer.BizBundleInitializer",
             "com.thingclips.smart.android.bizbundle.initializer.BizBundleInitializer",
             "com.tuya.smart.bizbundle.initializer.BizBundleInitializer",
             "com.tuya.smart.android.bizbundle.initializer.BizBundleInitializer"
         )
 
-        var inited = false
-
-        // 1) Prefer TuyaWrapper.init(...) because docs are written around this flow.
-        for (className in wrapperCandidates) {
+        for (className in candidates) {
             try {
-                val clz = Class.forName(className)
+                val initializerClass = Class.forName(className)
 
-                val init3 = clz.methods.firstOrNull { m ->
+                initializerClass.methods.firstOrNull { m ->
+                    m.name == "init" &&
+                        m.parameterTypes.size == 1 &&
+                        Application::class.java.isAssignableFrom(m.parameterTypes[0])
+                }?.let { m ->
+                    m.invoke(null, this)
+                    Log.d(TAG, "✅ BizBundle init OK via $className.init(Application)")
+                    return
+                }
+
+                val init3 = initializerClass.methods.firstOrNull { m ->
                     m.name == "init" &&
                         m.parameterTypes.size == 3 &&
-                        Application::class.java.isAssignableFrom(m.parameterTypes[0])
+                        Application::class.java.isAssignableFrom(m.parameterTypes[0]) &&
+                        m.parameterTypes[1].isInterface &&
+                        m.parameterTypes[2].isInterface
                 }
 
                 if (init3 != null) {
@@ -66,118 +82,20 @@ class MainApplication : Application() {
 
                     init3.invoke(null, this, routeListener, serviceListener)
                     Log.d(TAG, "✅ BizBundle init OK via $className.init(Application, Route, Service)")
-                    inited = true
-                    break
+                    return
                 }
 
-                val init1 = clz.methods.firstOrNull { m ->
-                    m.name == "init" &&
-                        m.parameterTypes.size == 1 &&
-                        Application::class.java.isAssignableFrom(m.parameterTypes[0])
-                }
-
-                if (init1 != null) {
-                    init1.invoke(null, this)
-                    Log.d(TAG, "✅ BizBundle init OK via $className.init(Application)")
-                    inited = true
-                    break
-                }
+                Log.w(TAG, "⚠️ Found $className but no supported init(...) signature")
             } catch (t: Throwable) {
-                Log.w(TAG, "BizBundle wrapper init failed for $className: ${t.javaClass.simpleName}: ${t.message}")
+                Log.w(TAG, "⚠️ BizBundle init failed for $className: ${t.javaClass.simpleName}: ${t.message}")
             }
         }
 
-        // 2) Fallback to initializer if wrapper class is not exposed in this build.
-        if (!inited) {
-            for (className in initializerCandidates) {
-                try {
-                    val clz = Class.forName(className)
-
-                    val init3 = clz.methods.firstOrNull { m ->
-                        m.name == "init" &&
-                            m.parameterTypes.size == 3 &&
-                            Application::class.java.isAssignableFrom(m.parameterTypes[0])
-                    }
-
-                    if (init3 != null) {
-                        val routeListenerType = init3.parameterTypes[1]
-                        val serviceListenerType = init3.parameterTypes[2]
-
-                        val routeListener = createLoggingProxy(routeListenerType, "RouteEventListener")
-                        val serviceListener = createLoggingProxy(serviceListenerType, "ServiceEventListener")
-
-                        init3.invoke(null, this, routeListener, serviceListener)
-                        Log.d(TAG, "✅ BizBundle init OK via $className.init(Application, Route, Service)")
-                        inited = true
-                        break
-                    }
-
-                    val init1 = clz.methods.firstOrNull { m ->
-                        m.name == "init" &&
-                            m.parameterTypes.size == 1 &&
-                            Application::class.java.isAssignableFrom(m.parameterTypes[0])
-                    }
-
-                    if (init1 != null) {
-                        init1.invoke(null, this)
-                        Log.d(TAG, "✅ BizBundle init OK via $className.init(Application)")
-                        inited = true
-                        break
-                    }
-                } catch (t: Throwable) {
-                    Log.w(TAG, "BizBundle initializer init failed for $className: ${t.javaClass.simpleName}: ${t.message}")
-                }
-            }
-        }
-
-        if (!inited) {
-            Log.e(TAG, "❌ BizBundle init failed. QR / Add Device UI will not be reliable.")
-            return
-        }
-
-        // 3) Best-effort TuyaOptimusSdk.init(this) per official framework init sequence.
-        initOptimusBestEffort()
-
-        // 4) Register AbsBizBundleFamilyService -> BizBundleFamilyServiceImpl
-        registerFamilyServiceBestEffort()
-
-        // 5) Keep current cached values visible in logs.
-        BizBundleFamilyServiceImpl.bootstrap()
+        Log.e(TAG, "❌ BizBundle initializer not found")
     }
 
-    private fun initOptimusBestEffort() {
-        val candidates = listOf(
-            "com.thingclips.smart.optimus.sdk.TuyaOptimusSdk",
-            "com.thingclips.smart.android.optimus.sdk.TuyaOptimusSdk",
-            "com.tuya.smart.optimus.sdk.TuyaOptimusSdk",
-            "com.tuya.smart.android.optimus.sdk.TuyaOptimusSdk"
-        )
-
-        for (cn in candidates) {
-            try {
-                val clz = Class.forName(cn)
-                val init = clz.methods.firstOrNull { m ->
-                    m.name == "init" &&
-                        m.parameterTypes.size == 1 &&
-                        Application::class.java.isAssignableFrom(m.parameterTypes[0])
-                } ?: continue
-
-                init.invoke(null, this)
-                Log.d(TAG, "✅ TuyaOptimusSdk.init OK via $cn")
-                return
-            } catch (_: Throwable) {
-            }
-        }
-
-        Log.w(TAG, "⚠️ TuyaOptimusSdk class not found (not fatal for all builds).")
-    }
-
-    private fun registerFamilyServiceBestEffort() {
-        val wrapperCandidates = listOf(
-            "com.thingclips.smart.bizbundle.TuyaWrapper",
-            "com.thingclips.smart.android.bizbundle.TuyaWrapper",
-            "com.tuya.smart.bizbundle.TuyaWrapper",
-            "com.tuya.smart.android.bizbundle.TuyaWrapper",
+    private fun registerBizBundleFamilyServiceReflectively() {
+        val initializerCandidates = listOf(
             "com.thingclips.smart.bizbundle.initializer.BizBundleInitializer",
             "com.thingclips.smart.android.bizbundle.initializer.BizBundleInitializer",
             "com.tuya.smart.bizbundle.initializer.BizBundleInitializer",
@@ -185,39 +103,38 @@ class MainApplication : Application() {
         )
 
         val familyServiceCandidates = listOf(
-            "com.thingclips.smart.commonbiz.bizbundle.family.api.AbsBizBundleFamilyService",
-            "com.thingclips.smart.family.bizbundle.api.AbsBizBundleFamilyService",
             "com.thingclips.smart.bizbundle.family.api.AbsBizBundleFamilyService",
             "com.thingclips.smart.family.api.AbsBizBundleFamilyService",
-            "com.tuya.smart.commonbiz.bizbundle.family.api.AbsBizBundleFamilyService",
-            "com.tuya.smart.family.bizbundle.api.AbsBizBundleFamilyService",
             "com.tuya.smart.bizbundle.family.api.AbsBizBundleFamilyService",
             "com.tuya.smart.family.api.AbsBizBundleFamilyService"
         )
 
-        for (wrapperName in wrapperCandidates) {
+        for (initializerName in initializerCandidates) {
             try {
-                val wrapperClass = Class.forName(wrapperName)
-                val register = wrapperClass.methods.firstOrNull { m ->
+                val initializerClass = Class.forName(initializerName)
+
+                val registerMethod = initializerClass.methods.firstOrNull { m ->
                     m.name == "registerService" &&
                         m.parameterTypes.size == 2 &&
                         m.parameterTypes[0] == Class::class.java
                 } ?: continue
 
-                for (ifaceName in familyServiceCandidates) {
+                for (serviceName in familyServiceCandidates) {
                     try {
-                        val ifaceClass = Class.forName(ifaceName)
-                        register.invoke(null, ifaceClass, BizBundleFamilyServiceImpl)
-                        Log.d(TAG, "✅ registerService($ifaceName -> BizBundleFamilyServiceImpl) via $wrapperName")
+                        val familyServiceClass = Class.forName(serviceName)
+                        registerMethod.invoke(null, familyServiceClass, BizBundleFamilyServiceImpl)
+                        Log.d(TAG, "✅ Family service registered via $initializerName / $serviceName")
                         return
-                    } catch (_: Throwable) {
+                    } catch (inner: Throwable) {
+                        Log.w(TAG, "⚠️ Family service register failed for $serviceName: ${inner.message}")
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
+                Log.w(TAG, "⚠️ registerService lookup failed for $initializerName: ${t.message}")
             }
         }
 
-        Log.w(TAG, "⚠️ Could not register AbsBizBundleFamilyService reflectively.")
+        Log.e(TAG, "❌ Could not register BizBundle family service")
     }
 
     private fun createLoggingProxy(iface: Class<*>, label: String): Any {
@@ -225,7 +142,10 @@ class MainApplication : Application() {
             iface.classLoader,
             arrayOf(iface)
         ) { _, method, args ->
-            if (method.name.contains("onFail", ignoreCase = true)) {
+            if (
+                method.name.contains("fail", ignoreCase = true) ||
+                method.name.contains("error", ignoreCase = true)
+            ) {
                 Log.e(TAG, "❌ $label callback: method=${method.name} args=${args?.toList()}")
             }
             null

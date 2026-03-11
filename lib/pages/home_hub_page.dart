@@ -20,14 +20,9 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
   bool _refreshOnResume = false;
 
   static const _bg = Color(0xFF06080D);
-  static const _card = Color(0xFF111318);
-  static const _card2 = Color(0xFF181C22);
-  static const _textMuted = Color(0xFF8C95A3);
-  static const _navy = Color(0xFF1D2E45);
-  static const _blue = Color(0xFF4F8FD6);
-  static const _cyan = Color(0xFF29D3C2);
-  static const _green = Color(0xFF2FD0A6);
   static const _orange = Color(0xFFFF7B39);
+  static const _green = Color(0xFF2FD0A6);
+  static const _cyan = Color(0xFF29D3C2);
 
   @override
   void initState() {
@@ -93,9 +88,39 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
     }
   }
 
+  Future<void> _openDevicePanel(ThingDevice device) async {
+    try {
+      _refreshOnResume = true;
+      await TuyaPlatform.openDevicePanel(devId: device.devId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open ${device.name}: $e'),
+        ),
+      );
+    }
+  }
+
+  int _gridCountForWidth(double width) {
+    if (width >= 1200) return 4;
+    if (width >= 840) return 3;
+    return 2;
+  }
+
+  double _gridAspectRatioForWidth(double width) {
+    if (width < 360) return 0.76;
+    if (width < 430) return 0.83;
+    if (width < 840) return 0.9;
+    return 0.98;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hub = ref.watch(homeHubControllerProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final gridCount = _gridCountForWidth(screenWidth);
+    final gridAspect = _gridAspectRatioForWidth(screenWidth);
 
     return Scaffold(
       backgroundColor: _bg,
@@ -113,8 +138,9 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
           final devices = data.devices;
           final gateway = data.selectedGateway;
           final busy = data.isRefreshing;
-          final homeTitle =
-              data.selectedHomeName.trim().isEmpty ? 'My home' : data.selectedHomeName;
+          final homeTitle = data.selectedHomeName.trim().isEmpty
+              ? 'My home'
+              : data.selectedHomeName;
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -133,7 +159,9 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
                     homes: data.homes,
                     selectedHomeId: data.selectedHomeId,
                     onSelectHome: (home) async {
-                      await ref.read(homeHubControllerProvider.notifier).selectHome(home);
+                      await ref
+                          .read(homeHubControllerProvider.notifier)
+                          .selectHome(home);
                     },
                     onAdd: _openAddDevice,
                     onLogout: _logout,
@@ -141,61 +169,123 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      10,
+                      screenWidth < 380 ? 12 : 16,
+                      0,
+                    ),
                     child: _PromoBanner(
-                      onTap: gateway == null ? _openAddDevice : () => _openGatewayPairFlow(gateway),
+                      onTap: gateway == null
+                          ? _openAddDevice
+                          : () => _openGatewayPairFlow(gateway),
                     ),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      14,
+                      screenWidth < 380 ? 12 : 16,
+                      0,
+                    ),
                     child: _AssistantCard(
-                      onTap: gateway == null ? _openAddDevice : () => _openGatewayPairFlow(gateway),
+                      onTap: gateway == null
+                          ? _openAddDevice
+                          : () => _openGatewayPairFlow(gateway),
                     ),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                    child: Row(
-                      children: const [
-                        Expanded(
-                          child: _InfoStatCard(
-                            title: 'Home status',
-                            value: 'Ready',
-                            subtitle: 'Gateway, devices, and pairing tools in one place',
-                            icon: Icons.wb_sunny_rounded,
-                            accent: _orange,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: _InfoStatCard(
-                            title: 'Energy',
-                            value: 'No data',
-                            subtitle: 'You can wire this later to Tuya energy data',
-                            icon: Icons.bolt_rounded,
-                            accent: _green,
-                          ),
-                        ),
-                      ],
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      14,
+                      screenWidth < 380 ? 12 : 16,
+                      0,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isTight = constraints.maxWidth < 430;
+                        if (isTight) {
+                          return const Column(
+                            children: [
+                              _InfoStatCard(
+                                title: 'Home status',
+                                value: 'Ready',
+                                subtitle:
+                                    'Gateway, devices, and pairing tools in one place',
+                                icon: Icons.wb_sunny_rounded,
+                                accent: _orange,
+                              ),
+                              SizedBox(height: 12),
+                              _InfoStatCard(
+                                title: 'Energy',
+                                value: 'No data',
+                                subtitle:
+                                    'You can wire this later to Tuya energy data',
+                                icon: Icons.bolt_rounded,
+                                accent: _green,
+                              ),
+                            ],
+                          );
+                        }
+
+                        return const Row(
+                          children: [
+                            Expanded(
+                              child: _InfoStatCard(
+                                title: 'Home status',
+                                value: 'Ready',
+                                subtitle:
+                                    'Gateway, devices, and pairing tools in one place',
+                                icon: Icons.wb_sunny_rounded,
+                                accent: _orange,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: _InfoStatCard(
+                                title: 'Energy',
+                                value: 'No data',
+                                subtitle:
+                                    'You can wire this later to Tuya energy data',
+                                icon: Icons.bolt_rounded,
+                                accent: _green,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      18,
+                      screenWidth < 380 ? 12 : 16,
+                      8,
+                    ),
                     child: _SectionTitle(
                       title: 'Current gateway',
                       actionLabel: gateway == null ? null : 'Add sub-device',
-                      onAction: gateway == null ? null : () => _openGatewayPairFlow(gateway),
+                      onAction: gateway == null
+                          ? null
+                          : () => _openGatewayPairFlow(gateway),
                     ),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      0,
+                      screenWidth < 380 ? 12 : 16,
+                      0,
+                    ),
                     child: gateway == null
                         ? _EmptyGatewayCard(
                             onAddGateway: _openAddDevice,
@@ -209,7 +299,12 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      20,
+                      screenWidth < 380 ? 12 : 16,
+                      8,
+                    ),
                     child: _SectionTitle(
                       title: 'Devices',
                       actionLabel: 'Refresh',
@@ -222,7 +317,12 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
                 if (devices.isEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      padding: EdgeInsets.fromLTRB(
+                        screenWidth < 380 ? 12 : 16,
+                        0,
+                        screenWidth < 380 ? 12 : 16,
+                        24,
+                      ),
                       child: _EmptyDevicesCard(
                         onAdd: _openAddDevice,
                       ),
@@ -230,58 +330,53 @@ class _HomeHubPageState extends ConsumerState<HomeHubPage>
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                    padding: EdgeInsets.fromLTRB(
+                      screenWidth < 380 ? 12 : 16,
+                      0,
+                      screenWidth < 380 ? 12 : 16,
+                      28,
+                    ),
                     sliver: SliverGrid(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
                           final device = devices[index];
-                          final isSelectedGateway = data.selectedGatewayId == device.devId;
+                          final isSelectedGateway =
+                              device.isGateway &&
+                              data.selectedGatewayId == device.devId;
 
                           return _SmartDeviceCard(
                             device: device,
                             selectedGateway: isSelectedGateway,
                             homeName: homeTitle,
                             onTap: () {
-                              if (device.isGateway || isSelectedGateway) {
+                              if (device.isGateway) {
                                 _openGatewayPairFlow(device);
                                 return;
                               }
-                              ref
-                                  .read(homeHubControllerProvider.notifier)
-                                  .setSelectedGateway(device.devId);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('${device.name} is now the current gateway target.'),
-                                ),
-                              );
-                            },
-                            onUseAsGateway: () {
-                              ref
-                                  .read(homeHubControllerProvider.notifier)
-                                  .setSelectedGateway(device.devId);
+                              _openDevicePanel(device);
                             },
                           );
                         },
                         childCount: devices.length,
                       ),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: gridCount,
                         mainAxisSpacing: 14,
                         crossAxisSpacing: 14,
-                        childAspectRatio: 0.88,
+                        childAspectRatio: gridAspect,
                       ),
                     ),
                   ),
                 SliverToBoxAdapter(
-  child: busy
-      ? const Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
-        )
-      : const SizedBox.shrink(),
-),
+                  child: busy
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           );
@@ -353,11 +448,12 @@ class _GatewaySubDevicePairingPageState
     });
 
     try {
-      final paired =
-          await ref.read(homeHubControllerProvider.notifier).startGatewaySubDevicePairing(
-                gatewayDevId: widget.gateway.devId,
-                timeoutSeconds: 120,
-              );
+      final paired = await ref
+          .read(homeHubControllerProvider.notifier)
+          .startGatewaySubDevicePairing(
+            gatewayDevId: widget.gateway.devId,
+            timeoutSeconds: 120,
+          );
 
       if (!mounted) return;
 
@@ -385,6 +481,9 @@ class _GatewaySubDevicePairingPageState
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final radarSize = math.min(width * 0.72, 280.0);
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -399,7 +498,7 @@ class _GatewaySubDevicePairingPageState
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+          padding: EdgeInsets.fromLTRB(width < 380 ? 14 : 18, 8, width < 380 ? 14 : 18, 24),
           child: Column(
             children: [
               Row(
@@ -451,7 +550,8 @@ class _GatewaySubDevicePairingPageState
               const SizedBox(height: 18),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
                 decoration: BoxDecoration(
                   color: _card,
                   borderRadius: BorderRadius.circular(24),
@@ -470,8 +570,8 @@ class _GatewaySubDevicePairingPageState
               Expanded(
                 child: Center(
                   child: SizedBox(
-                    width: 280,
-                    height: 280,
+                    width: radarSize,
+                    height: radarSize,
                     child: AnimatedBuilder(
                       animation: _controller,
                       builder: (_, __) {
@@ -521,42 +621,94 @@ class _GatewaySubDevicePairingPageState
                       ),
                     ],
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _working ? null : _startPairing,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: _blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final stacked = constraints.maxWidth < 360;
+                        if (stacked) {
+                          return Column(
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton(
+                                  onPressed: _working ? null : _startPairing,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: _blue,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child:
+                                      Text(_working ? 'Scanning...' : 'Try again'),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    await ref
+                                        .read(homeHubControllerProvider.notifier)
+                                        .openBizAddDevice();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    side: BorderSide(
+                                      color: Colors.white.withOpacity(0.14),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  child: const Text('Open Tuya UI'),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _working ? null : _startPairing,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _blue,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: Text(_working ? 'Scanning...' : 'Try again'),
                               ),
                             ),
-                            child: Text(_working ? 'Scanning...' : 'Try again'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () async {
-                              await ref
-                                  .read(homeHubControllerProvider.notifier)
-                                  .openBizAddDevice();
-                            },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(color: Colors.white.withOpacity(0.14)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await ref
+                                      .read(homeHubControllerProvider.notifier)
+                                      .openBizAddDevice();
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  side: BorderSide(
+                                    color: Colors.white.withOpacity(0.14),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: const Text('Open Tuya UI'),
                               ),
                             ),
-                            child: const Text('Open Tuya UI'),
-                          ),
-                        ),
-                      ],
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -696,7 +848,10 @@ class _HeroHeader extends StatelessWidget {
                 PopupMenuButton<int>(
                   tooltip: 'Switch home',
                   color: const Color(0xFF1A2230),
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: Colors.white,
+                  ),
                   onSelected: (id) async {
                     final match = homes.firstWhere((h) => h.homeId == id);
                     await onSelectHome(match);
@@ -715,7 +870,8 @@ class _HeroHeader extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: onAdd,
-                  icon: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+                  icon:
+                      const Icon(Icons.add_rounded, color: Colors.white, size: 30),
                 ),
                 IconButton(
                   onPressed: onLogout,
@@ -750,13 +906,14 @@ class _PromoBanner extends StatelessWidget {
             colors: [Color(0xFFE9EEF8), Color(0xFFB7C7E2)],
           ),
         ),
-        child: Row(
-          children: [
-            const Expanded(
-              child: Column(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 360;
+            if (stacked) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Your smart home is ready to grow',
                     style: TextStyle(
                       color: Color(0xFF132B55),
@@ -764,8 +921,8 @@ class _PromoBanner extends StatelessWidget {
                       fontSize: 16,
                     ),
                   ),
-                  SizedBox(height: 10),
-                  Text(
+                  const SizedBox(height: 10),
+                  const Text(
                     '• Add gateways and Zigbee devices\n'
                     '• Launch the official Tuya add-device flow\n'
                     '• Keep your current gateway selected for sub-device pairing',
@@ -775,26 +932,76 @@ class _PromoBanner extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: 14),
-                  _DarkPillButton(label: 'Check now'),
+                  const SizedBox(height: 14),
+                  const _DarkPillButton(label: 'Check now'),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.72),
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: const Icon(
+                        Icons.devices_other_rounded,
+                        size: 44,
+                        color: Color(0xFF224A82),
+                      ),
+                    ),
+                  ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 92,
-              height: 92,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.72),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const Icon(
-                Icons.devices_other_rounded,
-                size: 44,
-                color: Color(0xFF224A82),
-              ),
-            ),
-          ],
+              );
+            }
+
+            return Row(
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your smart home is ready to grow',
+                        style: TextStyle(
+                          color: Color(0xFF132B55),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        '• Add gateways and Zigbee devices\n'
+                        '• Launch the official Tuya add-device flow\n'
+                        '• Keep your current gateway selected for sub-device pairing',
+                        style: TextStyle(
+                          color: Color(0xFF1A3766),
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 14),
+                      _DarkPillButton(label: 'Check now'),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 92,
+                  height: 92,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.72),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(
+                    Icons.devices_other_rounded,
+                    size: 44,
+                    color: Color(0xFF224A82),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -904,7 +1111,7 @@ class _InfoStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 176,
+      constraints: const BoxConstraints(minHeight: 176),
       decoration: BoxDecoration(
         color: const Color(0xFF14171D),
         borderRadius: BorderRadius.circular(24),
@@ -914,7 +1121,7 @@ class _InfoStatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: accent, size: 34),
-          const Spacer(),
+          const SizedBox(height: 28),
           Text(
             title,
             style: const TextStyle(
@@ -960,15 +1167,16 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
-        const Spacer(),
         if (actionLabel != null && onAction != null)
           TextButton(
             onPressed: onAction,
@@ -998,7 +1206,8 @@ class _CurrentGatewayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = gateway.isOnline ? const Color(0xFF2FD0A6) : Colors.redAccent;
+    final statusColor =
+        gateway.isOnline ? const Color(0xFF2FD0A6) : Colors.redAccent;
 
     return Container(
       decoration: BoxDecoration(
@@ -1069,44 +1278,93 @@ class _CurrentGatewayCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  onPressed: onAddSubDevice,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF29D3C2),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 360;
+              if (stacked) {
+                return Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: onAddSubDevice,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF29D3C2),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        child: const Text(
+                          'Add sub-device',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: onOpenTuyaUi,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        child: const Text(
+                          'Open Tuya UI',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onAddSubDevice,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF29D3C2),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      child: const Text(
+                        'Add sub-device',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Add sub-device',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onOpenTuyaUi,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onOpenTuyaUi,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      child: const Text(
+                        'Open Tuya UI',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Open Tuya UI',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -1182,18 +1440,17 @@ class _SmartDeviceCard extends StatelessWidget {
     required this.selectedGateway,
     required this.homeName,
     required this.onTap,
-    required this.onUseAsGateway,
   });
 
   final ThingDevice device;
   final bool selectedGateway;
   final String homeName;
   final VoidCallback onTap;
-  final VoidCallback onUseAsGateway;
 
   @override
   Widget build(BuildContext context) {
-    final powerColor = device.isOnline ? const Color(0xFF29D3C2) : const Color(0xFF5C6472);
+    final powerColor =
+        device.isOnline ? const Color(0xFF29D3C2) : const Color(0xFF5C6472);
 
     return InkWell(
       onTap: onTap,
@@ -1213,7 +1470,12 @@ class _SmartDeviceCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  _DeviceIcon(iconUrl: device.iconUrl, isGateway: device.isGateway),
+                  Flexible(
+                    child: _DeviceIcon(
+                      iconUrl: device.iconUrl,
+                      isGateway: device.isGateway,
+                    ),
+                  ),
                   const Spacer(),
                   Container(
                     width: 44,
@@ -1223,7 +1485,9 @@ class _SmartDeviceCard extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      device.isGateway ? Icons.router_rounded : Icons.power_settings_new_rounded,
+                      device.isGateway
+                          ? Icons.router_rounded
+                          : Icons.power_settings_new_rounded,
                       color: Colors.black,
                     ),
                   ),
@@ -1233,7 +1497,8 @@ class _SmartDeviceCard extends StatelessWidget {
               if (selectedGateway)
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF29D3C2).withOpacity(0.18),
                     borderRadius: BorderRadius.circular(999),
@@ -1244,26 +1509,6 @@ class _SmartDeviceCard extends StatelessWidget {
                       color: Color(0xFF29D3C2),
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              else if (!device.isGateway)
-                GestureDetector(
-                  onTap: onUseAsGateway,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'Use as gateway',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
                     ),
                   ),
                 ),
@@ -1309,7 +1554,8 @@ class _DeviceIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fallbackIcon = isGateway ? Icons.router_rounded : Icons.sensors_rounded;
+    final fallbackIcon =
+        isGateway ? Icons.router_rounded : Icons.sensors_rounded;
 
     return Container(
       width: 54,
@@ -1323,7 +1569,8 @@ class _DeviceIcon extends StatelessWidget {
           ? Image.network(
               iconUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(fallbackIcon, color: Colors.black54),
+              errorBuilder: (_, __, ___) =>
+                  Icon(fallbackIcon, color: Colors.black54),
             )
           : Icon(fallbackIcon, color: Colors.black54),
     );
@@ -1442,7 +1689,8 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 46),
+            const Icon(Icons.error_outline_rounded,
+                color: Colors.redAccent, size: 46),
             const SizedBox(height: 14),
             const Text(
               'Something went wrong',

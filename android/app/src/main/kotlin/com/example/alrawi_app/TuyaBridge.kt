@@ -1,6 +1,7 @@
 package com.example.alrawi_app
 
 import android.app.Activity
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +21,7 @@ import com.thingclips.smart.sdk.bean.DeviceBean
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.lang.ref.WeakReference
+import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 
 object TuyaBridge {
@@ -72,7 +74,6 @@ object TuyaBridge {
                     result.success(logged)
                 }
 
-                // ---------------- AUTH ----------------
                 "loginByEmail" -> {
                     val countryCode = call.argument<String>("countryCode") ?: ""
                     val email = call.argument<String>("email") ?: ""
@@ -94,11 +95,7 @@ object TuyaBridge {
                             override fun onError(code: String?, error: String?) {
                                 Log.e(TAG, "❌ loginByEmail error code=$code msg=$error")
                                 mainHandler.post {
-                                    result.error(
-                                        code ?: "LOGIN_FAILED",
-                                        error ?: "login failed",
-                                        null
-                                    )
+                                    result.error(code ?: "LOGIN_FAILED", error ?: "login failed", null)
                                 }
                             }
                         }
@@ -126,11 +123,7 @@ object TuyaBridge {
                             override fun onError(code: String?, error: String?) {
                                 Log.e(TAG, "❌ sendEmailCode error code=$code msg=$error")
                                 mainHandler.post {
-                                    result.error(
-                                        code ?: "SEND_CODE_FAILED",
-                                        error ?: "send code failed",
-                                        null
-                                    )
+                                    result.error(code ?: "SEND_CODE_FAILED", error ?: "send code failed", null)
                                 }
                             }
                         }
@@ -160,11 +153,7 @@ object TuyaBridge {
                             override fun onError(code: String?, error: String?) {
                                 Log.e(TAG, "❌ registerEmail error code=$code msg=$error")
                                 mainHandler.post {
-                                    result.error(
-                                        code ?: "REGISTER_FAILED",
-                                        error ?: "register failed",
-                                        null
-                                    )
+                                    result.error(code ?: "REGISTER_FAILED", error ?: "register failed", null)
                                 }
                             }
                         }
@@ -183,21 +172,15 @@ object TuyaBridge {
                         override fun onError(code: String?, error: String?) {
                             Log.e(TAG, "❌ logout error code=$code msg=$error")
                             mainHandler.post {
-                                result.error(
-                                    code ?: "LOGOUT_FAILED",
-                                    error ?: "logout failed",
-                                    null
-                                )
+                                result.error(code ?: "LOGOUT_FAILED", error ?: "logout failed", null)
                             }
                         }
                     })
                 }
 
-                // ---------------- HOME ----------------
                 "getHomeList" -> {
                     Log.d(TAG, "➡️ getHomeList()")
-                    ThingHomeSdk.getHomeManagerInstance().queryHomeList(object :
-                        IThingGetHomeListCallback {
+                    ThingHomeSdk.getHomeManagerInstance().queryHomeList(object : IThingGetHomeListCallback {
                         override fun onSuccess(homeBeans: MutableList<HomeBean>?) {
                             Log.d(TAG, "✅ getHomeList success size=${homeBeans?.size ?: 0}")
                             val list = (homeBeans ?: mutableListOf()).map { hb ->
@@ -213,11 +196,7 @@ object TuyaBridge {
                         override fun onError(errorCode: String?, error: String?) {
                             Log.e(TAG, "❌ getHomeList error code=$errorCode msg=$error")
                             mainHandler.post {
-                                result.error(
-                                    errorCode ?: "HOME_LIST_FAILED",
-                                    error ?: "queryHomeList failed",
-                                    null
-                                )
+                                result.error(errorCode ?: "HOME_LIST_FAILED", error ?: "queryHomeList failed", null)
                             }
                         }
                     })
@@ -232,8 +211,7 @@ object TuyaBridge {
 
                     Log.d(TAG, "➡️ getHomeDevices(homeId=$homeId)")
 
-                    ThingHomeSdk.newHomeInstance(homeId).getHomeDetail(object :
-                        IThingHomeResultCallback {
+                    ThingHomeSdk.newHomeInstance(homeId).getHomeDetail(object : IThingHomeResultCallback {
                         override fun onSuccess(bean: HomeBean?) {
                             try {
                                 val devices = extractDevicesFromHome(bean)
@@ -242,11 +220,7 @@ object TuyaBridge {
                             } catch (t: Throwable) {
                                 Log.e(TAG, "❌ getHomeDevices parse failed", t)
                                 mainHandler.post {
-                                    result.error(
-                                        "GET_HOME_DEVICES_FAILED",
-                                        t.message ?: "parse failed",
-                                        null
-                                    )
+                                    result.error("GET_HOME_DEVICES_FAILED", t.message ?: "parse failed", null)
                                 }
                             }
                         }
@@ -254,11 +228,7 @@ object TuyaBridge {
                         override fun onError(errorCode: String?, errorMsg: String?) {
                             Log.e(TAG, "❌ getHomeDevices error code=$errorCode msg=$errorMsg")
                             mainHandler.post {
-                                result.error(
-                                    errorCode ?: "GET_HOME_DEVICES_FAILED",
-                                    errorMsg ?: "getHomeDetail failed",
-                                    null
-                                )
+                                result.error(errorCode ?: "GET_HOME_DEVICES_FAILED", errorMsg ?: "getHomeDetail failed", null)
                             }
                         }
                     })
@@ -271,8 +241,7 @@ object TuyaBridge {
 
                     Log.d(TAG, "➡️ ensureHome(name=$name geo=$geoName rooms=${rooms.size})")
 
-                    ThingHomeSdk.getHomeManagerInstance().queryHomeList(object :
-                        IThingGetHomeListCallback {
+                    ThingHomeSdk.getHomeManagerInstance().queryHomeList(object : IThingGetHomeListCallback {
                         override fun onSuccess(homeBeans: MutableList<HomeBean>?) {
                             val existing = homeBeans?.firstOrNull()
                             if (existing != null) {
@@ -298,11 +267,7 @@ object TuyaBridge {
                                     override fun onSuccess(bean: HomeBean?) {
                                         if (bean == null) {
                                             mainHandler.post {
-                                                result.error(
-                                                    "CREATE_HOME_FAILED",
-                                                    "HomeBean is null",
-                                                    null
-                                                )
+                                                result.error("CREATE_HOME_FAILED", "HomeBean is null", null)
                                             }
                                             return
                                         }
@@ -319,11 +284,7 @@ object TuyaBridge {
 
                                     override fun onError(errorCode: String?, errorMsg: String?) {
                                         mainHandler.post {
-                                            result.error(
-                                                errorCode ?: "CREATE_HOME_FAILED",
-                                                errorMsg ?: "createHome failed",
-                                                null
-                                            )
+                                            result.error(errorCode ?: "CREATE_HOME_FAILED", errorMsg ?: "createHome failed", null)
                                         }
                                     }
                                 }
@@ -332,17 +293,12 @@ object TuyaBridge {
 
                         override fun onError(errorCode: String?, error: String?) {
                             mainHandler.post {
-                                result.error(
-                                    errorCode ?: "HOME_LIST_FAILED",
-                                    error ?: "queryHomeList failed",
-                                    null
-                                )
+                                result.error(errorCode ?: "HOME_LIST_FAILED", error ?: "queryHomeList failed", null)
                             }
                         }
                     })
                 }
 
-                // ---------------- BIZ CONTEXT ----------------
                 "ensureBizContext" -> {
                     val homeId = (call.argument<Number>("homeId") ?: 0).toLong()
                     if (!ThingHomeSdk.getUserInstance().isLogin) {
@@ -352,16 +308,11 @@ object TuyaBridge {
                     ensureBizContext(homeId) { ok, err ->
                         if (ok) mainHandler.post { result.success(true) }
                         else mainHandler.post {
-                            result.error(
-                                "ENSURE_BIZ_CONTEXT_FAILED",
-                                err ?: "unknown",
-                                null
-                            )
+                            result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null)
                         }
                     }
                 }
 
-                // ---------------- BIZ UI ----------------
                 "bizOpenAddDevice" -> {
                     val activity = currentActivity ?: run {
                         result.error("NO_ACTIVITY", "No foreground Activity available", null)
@@ -377,11 +328,7 @@ object TuyaBridge {
                     ensureBizContext(homeId) { ok, err ->
                         if (!ok) {
                             mainHandler.post {
-                                result.error(
-                                    "ENSURE_BIZ_CONTEXT_FAILED",
-                                    err ?: "unknown",
-                                    null
-                                )
+                                result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null)
                             }
                             return@ensureBizContext
                         }
@@ -391,11 +338,7 @@ object TuyaBridge {
                             onOk = { mainHandler.post { result.success(true) } },
                             onErr = { t ->
                                 mainHandler.post {
-                                    result.error(
-                                        "ADD_DEVICE_UI_FAILED",
-                                        t.message,
-                                        null
-                                    )
+                                    result.error("ADD_DEVICE_UI_FAILED", t.message, null)
                                 }
                             }
                         )
@@ -417,18 +360,13 @@ object TuyaBridge {
                     ensureBizContext(homeId) { ok, err ->
                         if (!ok) {
                             mainHandler.post {
-                                result.error(
-                                    "ENSURE_BIZ_CONTEXT_FAILED",
-                                    err ?: "unknown",
-                                    null
-                                )
+                                result.error("ENSURE_BIZ_CONTEXT_FAILED", err ?: "unknown", null)
                             }
                             return@ensureBizContext
                         }
                         mainHandler.post {
                             try {
-                                val scanClazz =
-                                    Class.forName("com.thingclips.smart.activator.scan.qrcode.ScanManager")
+                                val scanClazz = Class.forName("com.thingclips.smart.activator.scan.qrcode.ScanManager")
                                 val instance = scanClazz.getDeclaredField("INSTANCE").get(null)
 
                                 val openWithBundle = scanClazz.methods.firstOrNull { m ->
@@ -446,9 +384,7 @@ object TuyaBridge {
 
                                 val open = scanClazz.methods.firstOrNull { m ->
                                     m.name == "openScan" && m.parameterTypes.size == 1
-                                } ?: throw NoSuchMethodException(
-                                    "ScanManager.openScan(Context/*,Bundle*/) not found"
-                                )
+                                } ?: throw NoSuchMethodException("ScanManager.openScan(Context/*,Bundle*/) not found")
 
                                 open.invoke(instance, activity)
                                 result.success(true)
@@ -460,11 +396,18 @@ object TuyaBridge {
                     }
                 }
 
-                // ---------------- GATEWAY SUB-DEVICE PAIRING ----------------
+                "openDevicePanel" -> {
+                    val devId = call.argument<String>("devId")?.trim().orEmpty()
+                    if (devId.isEmpty()) {
+                        result.error("BAD_DEVICE_ID", "devId is empty", null)
+                        return
+                    }
+                    openDevicePanel(devId, result)
+                }
+
                 "startGatewaySubDevicePairing" -> {
                     val gatewayDevId = call.argument<String>("gatewayDevId")?.trim().orEmpty()
-                    val timeoutSeconds =
-                        (call.argument<Number>("timeoutSeconds") ?: 120).toInt()
+                    val timeoutSeconds = (call.argument<Number>("timeoutSeconds") ?: 120).toInt()
 
                     if (gatewayDevId.isEmpty()) {
                         result.error("BAD_GATEWAY_ID", "gatewayDevId is empty", null)
@@ -476,10 +419,7 @@ object TuyaBridge {
                         return
                     }
 
-                    Log.d(
-                        TAG,
-                        "➡️ startGatewaySubDevicePairing(gatewayDevId=$gatewayDevId timeoutSeconds=$timeoutSeconds)"
-                    )
+                    Log.d(TAG, "➡️ startGatewaySubDevicePairing(gatewayDevId=$gatewayDevId timeoutSeconds=$timeoutSeconds)")
 
                     mainHandler.post {
                         try {
@@ -487,13 +427,10 @@ object TuyaBridge {
 
                             val builder = ThingGwSubDevActivatorBuilder()
                                 .setDevId(gatewayDevId)
-                                .setTimeOut(timeoutSeconds)
+                                .setTimeOut(timeoutSeconds.toLong())
                                 .setListener(object : IThingSmartActivatorListener {
                                     override fun onError(errorCode: String?, errorMsg: String?) {
-                                        Log.e(
-                                            TAG,
-                                            "❌ Gateway sub-device pair error code=$errorCode msg=$errorMsg"
-                                        )
+                                        Log.e(TAG, "❌ Gateway sub-device pair error code=$errorCode msg=$errorMsg")
                                         stopGatewaySubDevicePairingBestEffort()
                                         mainHandler.post {
                                             result.error(
@@ -505,10 +442,7 @@ object TuyaBridge {
                                     }
 
                                     override fun onActiveSuccess(devResp: DeviceBean?) {
-                                        Log.d(
-                                            TAG,
-                                            "✅ Gateway sub-device pair success devId=${devResp?.devId}"
-                                        )
+                                        Log.d(TAG, "✅ Gateway sub-device pair success devId=${devResp?.devId}")
                                         stopGatewaySubDevicePairingBestEffort()
                                         val map = if (devResp != null) {
                                             deviceToMap(devResp)
@@ -526,15 +460,11 @@ object TuyaBridge {
                                     }
 
                                     override fun onStep(step: String?, data: Any?) {
-                                        Log.d(
-                                            TAG,
-                                            "ℹ️ Gateway sub-device pair step=$step data=${data?.javaClass?.name}"
-                                        )
+                                        Log.d(TAG, "ℹ️ Gateway sub-device pair step=$step data=${data?.javaClass?.name}")
                                     }
                                 })
 
-                            val activator = ThingHomeSdk.getActivatorInstance()
-                                .newGwSubDevActivator(builder)
+                            val activator = ThingHomeSdk.getActivatorInstance().newGwSubDevActivator(builder)
 
                             gwSubActivator = activator
                             val startMethod = activator.javaClass.methods.firstOrNull {
@@ -564,46 +494,310 @@ object TuyaBridge {
         }
     }
 
-    // ------------------------------------------------------------
-    // Home device parsing helpers
-    // ------------------------------------------------------------
-    private fun extractDevicesFromHome(homeBean: HomeBean?): List<HashMap<String, Any?>> {
-        if (homeBean == null) return emptyList()
-
-        val rawDevices = mutableListOf<Any>()
-
-        try {
-            val getter = homeBean.javaClass.methods.firstOrNull {
-                it.name == "getDeviceList" && it.parameterTypes.isEmpty()
-            }
-            val value = getter?.invoke(homeBean)
-            if (value is Collection<*>) {
-                rawDevices.addAll(value.filterNotNull())
-            }
-        } catch (_: Throwable) {
+    private fun openDevicePanel(devId: String, result: MethodChannel.Result) {
+        val activity = currentActivity
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "No foreground Activity available", null)
+            return
         }
 
-        if (rawDevices.isEmpty()) {
+        mainHandler.post {
             try {
-                val field = homeBean.javaClass.declaredFields.firstOrNull { it.name == "deviceList" }
-                field?.isAccessible = true
-                val value = field?.get(homeBean)
-                if (value is Collection<*>) {
-                    rawDevices.addAll(value.filterNotNull())
+                Log.d(TAG, "➡️ openDevicePanel(devId=$devId)")
+
+                var service = findPanelCallerService()
+
+                if (service == null) {
+                    Log.w(TAG, "⚠️ AbsPanelCallerService not resolved from MicroServiceManager, forcing panel classes load")
+                    forceLoadPanelCallerClasses()
+                    service = findPanelCallerService()
+                }
+
+                if (service == null) {
+                    throw IllegalStateException(
+                        "AbsPanelCallerService not found. Make sure Device Control UI BizBundle dependencies are added (thingsmart-bizbundle-panel/basekit/bizkit/devicekit)."
+                    )
+                }
+
+                val method = findBestPanelOpenMethod(service)
+                    ?: throw IllegalStateException("No compatible goPanel* method found on ${service.javaClass.name}")
+
+                val args = buildPanelArgs(method, activity, devId)
+                    ?: throw IllegalStateException("Could not build arguments for ${method.name} on ${service.javaClass.name}")
+
+                Log.d(TAG, "➡️ invoking ${service.javaClass.name}.${method.name}(${args.joinToString { it?.javaClass?.simpleName ?: "null" }})")
+                method.invoke(service, *args)
+
+                Log.d(TAG, "✅ openDevicePanel success via ${method.name}")
+                result.success(true)
+            } catch (t: Throwable) {
+                Log.e(TAG, "❌ openDevicePanel failed", t)
+                result.error("OPEN_PANEL_FAILED", t.message, null)
+            }
+        }
+    }
+
+    private fun forceLoadPanelCallerClasses() {
+        val candidates = listOf(
+            "com.thingclips.smart.panelcaller.PanelCallerServiceImpl",
+            "com.thingclips.smart.panelcaller.api.AbsPanelCallerService"
+        )
+
+        for (cn in candidates) {
+            try {
+                Class.forName(cn)
+                Log.d(TAG, "✅ forced class load: $cn")
+            } catch (t: Throwable) {
+                Log.w(TAG, "⚠️ force load failed for $cn: ${t.javaClass.simpleName}: ${t.message}")
+            }
+        }
+    }
+
+    private fun findPanelCallerService(): Any? {
+        val ifaceCandidates = listOf(
+            "com.thingclips.smart.panelcaller.api.AbsPanelCallerService",
+            "com.tuya.smart.panelcaller.api.AbsPanelCallerService"
+        )
+
+        findPanelCallerServiceViaMicroContext(ifaceCandidates)?.let { return it }
+        findPanelCallerServiceViaMicroServiceManager(ifaceCandidates)?.let { return it }
+
+        return null
+    }
+
+    private fun findPanelCallerServiceViaMicroContext(ifaceCandidates: List<String>): Any? {
+        val contextCandidates = listOf(
+            "com.thingclips.smart.android.commonbiz.service.MicroContext",
+            "com.thingclips.smart.android.commonbiz.bizbundle.MicroContext",
+            "com.thingclips.smart.android.common.utils.MicroContext",
+            "com.thingclips.smart.android.common.MicroContext",
+            "com.tuya.smart.android.commonbiz.service.MicroContext",
+            "com.tuya.smart.android.commonbiz.bizbundle.MicroContext",
+            "com.tuya.smart.android.common.utils.MicroContext",
+            "com.tuya.smart.android.common.MicroContext"
+        )
+
+        for (cn in contextCandidates) {
+            try {
+                val clz = Class.forName(cn)
+                val getServiceManager = clz.methods.firstOrNull {
+                    it.name == "getServiceManager" && it.parameterTypes.isEmpty()
+                } ?: continue
+
+                val serviceManager = getServiceManager.invoke(null) ?: continue
+
+                for (ifaceName in ifaceCandidates) {
+                    invokeFindServiceByInterface(serviceManager, ifaceName)?.let { service ->
+                        Log.d(TAG, "✅ Panel service found via $cn / $ifaceName -> ${service.javaClass.name}")
+                        return service
+                    }
                 }
             } catch (_: Throwable) {
             }
         }
 
-        if (rawDevices.isEmpty()) {
+        return null
+    }
+
+    private fun findPanelCallerServiceViaMicroServiceManager(ifaceCandidates: List<String>): Any? {
+        val microCandidates = listOf(
+            "com.thingclips.smart.framework.service.MicroServiceManager",
+            "com.thingclips.smart.framework.service.MicroServiceManagerImpl",
+            "com.thingclips.smart.microservice.MicroServiceManager",
+            "com.tuya.smart.framework.service.MicroServiceManager",
+            "com.tuya.smart.framework.service.MicroServiceManagerImpl",
+            "com.tuya.smart.microservice.MicroServiceManager"
+        )
+
+        for (microClassName in microCandidates) {
+            try {
+                val microClass = Class.forName(microClassName)
+
+                val microInstance = runCatching {
+                    microClass.getMethod("getInstance").invoke(null)
+                }.getOrElse {
+                    runCatching {
+                        val f = microClass.getDeclaredField("INSTANCE")
+                        f.isAccessible = true
+                        f.get(null)
+                    }.getOrNull()
+                } ?: continue
+
+                for (ifaceName in ifaceCandidates) {
+                    invokeFindServiceByInterface(microInstance, ifaceName)?.let { service ->
+                        Log.d(TAG, "✅ Panel service found via $microClassName / $ifaceName -> ${service.javaClass.name}")
+                        return service
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+
+        return null
+    }
+
+    private fun invokeFindServiceByInterface(serviceManager: Any, ifaceName: String): Any? {
+        try {
+            val stringMethod = serviceManager.javaClass.methods.firstOrNull { m ->
+                m.name == "findServiceByInterface" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == String::class.java
+            }
+            if (stringMethod != null) {
+                val service = stringMethod.invoke(serviceManager, ifaceName)
+                if (service != null) return service
+            }
+        } catch (_: Throwable) {
+        }
+
+        try {
+            val classMethod = serviceManager.javaClass.methods.firstOrNull { m ->
+                m.name == "findServiceByInterface" &&
+                    m.parameterTypes.size == 1 &&
+                    m.parameterTypes[0] == Class::class.java
+            }
+            if (classMethod != null) {
+                val ifaceClass = Class.forName(ifaceName)
+                val service = classMethod.invoke(serviceManager, ifaceClass)
+                if (service != null) return service
+            }
+        } catch (_: Throwable) {
+        }
+
+        return null
+    }
+
+    private fun findBestPanelOpenMethod(service: Any): Method? {
+        val activity = currentActivity ?: return null
+
+        val preferredNames = listOf(
+            "goPanelWithCheckAndTip",
+            "goPanel"
+        )
+
+        for (name in preferredNames) {
+            val method = service.javaClass.methods
+                .filter { it.name == name }
+                .sortedBy { it.parameterTypes.size }
+                .firstOrNull { buildPanelArgs(it, activity, "__probe__") != null }
+
+            if (method != null) return method
+        }
+
+        return service.javaClass.methods
+            .filter { it.name.contains("goPanel", ignoreCase = true) }
+            .sortedBy { it.parameterTypes.size }
+            .firstOrNull { buildPanelArgs(it, activity, "__probe__") != null }
+    }
+
+    private fun buildPanelArgs(
+        method: Method,
+        activity: Activity,
+        devId: String
+    ): Array<Any?>? {
+        val params = method.parameterTypes
+        val args = arrayOfNulls<Any>(params.size)
+
+        var usedDevId = false
+
+        for (i in params.indices) {
+            val p = params[i]
+
+            when {
+                Activity::class.java.isAssignableFrom(p) || Context::class.java.isAssignableFrom(p) -> {
+                    args[i] = activity
+                }
+
+                p == String::class.java -> {
+                    if (usedDevId) return null
+                    args[i] = devId
+                    usedDevId = true
+                }
+
+                p == Bundle::class.java -> {
+                    args[i] = Bundle().apply {
+                        putString("devId", devId)
+                    }
+                }
+
+                p == java.lang.Boolean.TYPE || p == java.lang.Boolean::class.java -> {
+                    args[i] = false
+                }
+
+                p == java.lang.Integer.TYPE || p == java.lang.Integer::class.java -> {
+                    args[i] = 0
+                }
+
+                p == java.lang.Long.TYPE || p == java.lang.Long::class.java -> {
+                    args[i] = 0L
+                }
+
+                p.isEnum -> {
+                    val constants = p.enumConstants
+                    if (!constants.isNullOrEmpty()) {
+                        args[i] = constants.first()
+                    } else {
+                        return null
+                    }
+                }
+
+                p.isInterface -> {
+                    args[i] = Proxy.newProxyInstance(p.classLoader, arrayOf(p)) { _, _, _ -> null }
+                }
+
+                else -> return null
+            }
+        }
+
+        return if (usedDevId) args else null
+    }
+
+    private fun extractDevicesFromHome(homeBean: HomeBean?): List<HashMap<String, Any?>> {
+        if (homeBean == null) return emptyList()
+
+        val rawDevices = mutableListOf<Any>()
+
+        fun appendFrom(value: Any?) {
+            when (value) {
+                is Collection<*> -> rawDevices.addAll(value.filterNotNull())
+                is Map<*, *> -> rawDevices.addAll(value.values.filterNotNull())
+                is Array<*> -> rawDevices.addAll(value.filterNotNull())
+            }
+        }
+
+        val getterNames = listOf(
+            "getDeviceList",
+            "getDevList",
+            "getDevices",
+            "getHomeDevices",
+            "getDeviceMap"
+        )
+
+        for (name in getterNames) {
+            if (rawDevices.isNotEmpty()) break
             try {
                 val getter = homeBean.javaClass.methods.firstOrNull {
-                    it.name == "getDeviceMap" && it.parameterTypes.isEmpty()
+                    it.name == name && it.parameterTypes.isEmpty()
                 }
-                val value = getter?.invoke(homeBean)
-                if (value is Map<*, *>) {
-                    rawDevices.addAll(value.values.filterNotNull())
-                }
+                appendFrom(getter?.invoke(homeBean))
+            } catch (_: Throwable) {
+            }
+        }
+
+        val fieldNames = listOf(
+            "deviceList",
+            "devList",
+            "devices",
+            "homeDevices",
+            "deviceMap"
+        )
+
+        for (name in fieldNames) {
+            if (rawDevices.isNotEmpty()) break
+            try {
+                val field = homeBean.javaClass.declaredFields.firstOrNull { it.name == name }
+                field?.isAccessible = true
+                appendFrom(field?.get(homeBean))
             } catch (_: Throwable) {
             }
         }
@@ -633,9 +827,10 @@ object TuyaBridge {
         val computedGateway = explicitGateway ?: run {
             val cat = category?.lowercase().orEmpty()
             val lowerName = name.lowercase()
-            val hasGatewayWord = lowerName.contains("gateway") ||
-                lowerName.contains("hub") ||
-                lowerName.contains("panel")
+            val hasGatewayWord =
+                lowerName.contains("gateway") ||
+                    lowerName.contains("hub") ||
+                    lowerName.contains("panel")
             val categoryLooksGateway =
                 cat.contains("wg") || cat.contains("gateway") || cat.contains("hub")
             val nodeLooksGateway = parentId.isNullOrBlank() && !nodeId.isNullOrBlank() && hasGatewayWord
@@ -715,9 +910,6 @@ object TuyaBridge {
         gwSubActivator = null
     }
 
-    // ------------------------------------------------------------
-    // Biz context helpers
-    // ------------------------------------------------------------
     private fun ensureBizContext(homeId: Long, done: (Boolean, String?) -> Unit) {
         Log.d(TAG, "➡️ ensureBizContext(homeId=$homeId)")
 
@@ -754,10 +946,7 @@ object TuyaBridge {
                     }
 
                     override fun onError(errorCode: String?, errorMsg: String?) {
-                        cb(
-                            false,
-                            "${errorCode ?: "HOME_DETAIL_FAILED"}: ${errorMsg ?: "getHomeDetail failed"}"
-                        )
+                        cb(false, "${errorCode ?: "HOME_DETAIL_FAILED"}: ${errorMsg ?: "getHomeDetail failed"}")
                     }
                 })
             }
@@ -775,14 +964,11 @@ object TuyaBridge {
         for (cn in mgrCandidates) {
             try {
                 val clz = Class.forName(cn)
-                val instance =
-                    runCatching { clz.getDeclaredField("INSTANCE").get(null) }.getOrNull()
-                        ?: continue
+                val instance = runCatching { clz.getDeclaredField("INSTANCE").get(null) }.getOrNull() ?: continue
                 val m = clz.methods.firstOrNull { mm ->
                     mm.name == "setHomeId" &&
                         mm.parameterTypes.size == 1 &&
-                        (mm.parameterTypes[0] == java.lang.Long.TYPE ||
-                            mm.parameterTypes[0] == java.lang.Long::class.java)
+                        (mm.parameterTypes[0] == java.lang.Long.TYPE || mm.parameterTypes[0] == java.lang.Long::class.java)
                 } ?: continue
 
                 m.invoke(instance, homeId)
@@ -809,8 +995,7 @@ object TuyaBridge {
             val m = actInst.javaClass.methods.firstOrNull { mm ->
                 mm.name == "getActivatorToken" &&
                     mm.parameterTypes.size == 2 &&
-                    (mm.parameterTypes[0] == java.lang.Long.TYPE ||
-                        mm.parameterTypes[0] == java.lang.Long::class.java) &&
+                    (mm.parameterTypes[0] == java.lang.Long.TYPE || mm.parameterTypes[0] == java.lang.Long::class.java) &&
                     mm.parameterTypes[1].isInterface
             } ?: run {
                 done(0)
@@ -818,24 +1003,20 @@ object TuyaBridge {
             }
 
             val cbInterface = m.parameterTypes[1]
-            val proxy =
-                Proxy.newProxyInstance(cbInterface.classLoader, arrayOf(cbInterface)) { _, method, args ->
-                    if (method.name.equals("onSuccess", ignoreCase = true)) {
-                        val token = args?.firstOrNull() as? String
-                        Log.d(TAG, "✅ getActivatorToken success len=${token?.length ?: 0}")
-                        done(token?.length ?: 0)
-                        return@newProxyInstance null
-                    }
-                    if (
-                        method.name.contains("onFail", ignoreCase = true) ||
-                        method.name.equals("onError", ignoreCase = true)
-                    ) {
-                        Log.w(TAG, "⚠️ getActivatorToken failed: ${args?.toList()}")
-                        done(0)
-                        return@newProxyInstance null
-                    }
-                    null
+            val proxy = Proxy.newProxyInstance(cbInterface.classLoader, arrayOf(cbInterface)) { _, method, args ->
+                if (method.name.equals("onSuccess", ignoreCase = true)) {
+                    val token = args?.firstOrNull() as? String
+                    Log.d(TAG, "✅ getActivatorToken success len=${token?.length ?: 0}")
+                    done(token?.length ?: 0)
+                    return@newProxyInstance null
                 }
+                if (method.name.contains("onFail", ignoreCase = true) || method.name.equals("onError", ignoreCase = true)) {
+                    Log.w(TAG, "⚠️ getActivatorToken failed: ${args?.toList()}")
+                    done(0)
+                    return@newProxyInstance null
+                }
+                null
+            }
 
             Log.d(TAG, "➡️ Invoking getActivatorToken($homeId, cb) on ${actInst.javaClass.name}")
             m.invoke(actInst, homeId, proxy)
@@ -845,9 +1026,6 @@ object TuyaBridge {
         }
     }
 
-    // ------------------------------------------------------------
-    // Wrapper hooks (best effort)
-    // ------------------------------------------------------------
     private fun tryCallWrapperOnLogin() {
         val candidates = listOf(
             "com.thingclips.smart.bizbundle.TuyaWrapper",
@@ -856,10 +1034,7 @@ object TuyaBridge {
             "com.tuya.smart.android.bizbundle.TuyaWrapper"
         )
         try {
-            val clz =
-                candidates.firstNotNullOfOrNull { cn ->
-                    runCatching { Class.forName(cn) }.getOrNull()
-                } ?: return
+            val clz = candidates.firstNotNullOfOrNull { cn -> runCatching { Class.forName(cn) }.getOrNull() } ?: return
             val m = clz.methods.firstOrNull {
                 it.name == "onLogin" && it.parameterTypes.isEmpty()
             } ?: return
@@ -878,10 +1053,7 @@ object TuyaBridge {
             "com.tuya.smart.android.bizbundle.TuyaWrapper"
         )
         try {
-            val clz =
-                candidates.firstNotNullOfOrNull { cn ->
-                    runCatching { Class.forName(cn) }.getOrNull()
-                } ?: return
+            val clz = candidates.firstNotNullOfOrNull { cn -> runCatching { Class.forName(cn) }.getOrNull() } ?: return
             val m = clz.methods.firstOrNull {
                 it.name == "onLogout" && it.parameterTypes.size == 1
             } ?: return

@@ -16,6 +16,10 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+
+        // Tuya / ThingClips plugin repos
+        maven(url = "https://maven-other.tuya.com/repository/maven-commercial-releases/")
+        maven(url = "https://maven-other.tuya.com/repository/maven-releases/")
     }
 }
 
@@ -25,41 +29,43 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 
-
 dependencyResolutionManagement {
-    // ✅ Allow dependencies/plugins that declare their own repositories
     repositoriesMode.set(
-    org.gradle.api.initialization.resolve.RepositoriesMode.PREFER_SETTINGS
-)
-
+        org.gradle.api.initialization.resolve.RepositoriesMode.PREFER_SETTINGS
+    )
 
     repositories {
-    google()
-    mavenCentral()
+        google()
+        mavenCentral()
 
-    // ✅ Legacy fallback (needed by some Tuya BizBundle transitive deps)
-    jcenter()
+        // Legacy fallback for older Tuya transitive deps
+        jcenter()
 
-    maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
+        maven(url = "https://storage.googleapis.com/download.flutter.io")
 
-    // Tuya / ThingClips repos
-    // Tuya / ThingClips repos (✅ prefer commercial first)
-maven { url = uri("https://maven-other.tuya.com/repository/maven-commercial-releases/") }
-maven { url = uri("https://maven-other.tuya.com/repository/maven-releases/") }
+        // Tuya / ThingClips repos
+        // Prefer commercial first
+        maven(url = "https://maven-other.tuya.com/repository/maven-commercial-releases/")
+        maven(url = "https://maven-other.tuya.com/repository/maven-releases/")
 
+        // Tencent repo (qqopensdk)
+        maven(url = "https://dl.bintray.com/tencent/maven")
 
-    maven { url = uri("https://jitpack.io") }
+        // Huawei HMS repo
+        maven(url = "https://developer.huawei.com/repo/")
 
-    flatDir {
-        dirs("libs")
+        // Aliyun mirror for older Android/transitive artifacts
+        maven(url = "https://maven.aliyun.com/repository/public")
+
+        maven(url = "https://jitpack.io")
+
+        flatDir {
+            dirs("libs")
+        }
+
+        maven(url = "file://${rootDir}/app/libs")
     }
-
-    maven { url = uri("file://${rootDir}/app/libs") }
-
 }
-
-}
-
 
 rootProject.name = "alrawi_app"
 include(":app")

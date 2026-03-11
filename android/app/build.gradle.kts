@@ -1,60 +1,20 @@
-import java.util.Properties
-import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.alrawi_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
 
     defaultConfig {
         applicationId = "com.example.alrawi_app"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
+
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        // Tuya docs: BizBundles only support ARM ABIs.
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
-    }
-
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-
-    packaging {
-        resources {
-            excludes += "META-INF/INDEX.LIST"
-        }
-        jniLibs {
-            // Tuya docs recommend keeping these first when native conflicts happen.
-            pickFirsts += listOf(
-                "lib/*/liblog.so",
-                "lib/*/libc++_shared.so",
-                "lib/*/libyuv.so",
-                "lib/*/libopenh264.so",
-                "lib/*/libv8wrapper.so",
-                "lib/*/libv8android.so"
-            )
-        }
     }
 
     configurations.configureEach {
@@ -66,30 +26,83 @@ android {
                 .using(module("jp.wasabeef:recyclerview-animators:4.0.2"))
         }
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    splits {
+        abi {
+            isEnable = false
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
+
+    repositories {
+        flatDir { dirs("libs") }
+    }
+
+    packaging {
+        jniLibs {
+            pickFirsts += setOf(
+                "lib/*/liblog.so",
+                "lib/*/libc++_shared.so",
+                "lib/*/libyuv.so",
+                "lib/*/libopenh264.so",
+                "lib/*/libv8wrapper.so",
+                "lib/*/libv8android.so"
+            )
+        }
+        resources {
+            pickFirsts += setOf("META-INF/INDEX.LIST")
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/*.kotlin_module"
+            )
+        }
+    }
+}
+
+dependencies {
+    implementation(files("libs/security-algorithm-1.0.0-beta.aar"))
+    implementation("org.apache.ant:ant:1.10.5")
+
+    val tuyaVersion = "6.11.6"
+
+    implementation("com.thingclips.smart:thingsmart:$tuyaVersion")
+    implementation(enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:$tuyaVersion"))
+
+    // BizBundle core
+    implementation("com.thingclips.smart:thingsmart-bizbundle-basekit")
+    implementation("com.thingclips.smart:thingsmart-bizbundle-bizkit")
+
+    // Family/home context support
+    implementation("com.thingclips.smart:thingsmart-bizbundle-family")
+
+    // Device pairing UI
+    implementation("com.thingclips.smart:thingsmart-bizbundle-device_activator")
+    implementation("com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit")
+
+    // Device Control UI BizBundle
+    implementation("com.thingclips.smart:thingsmart-bizbundle-panel")
+    implementation("com.thingclips.smart:thingsmart-bizbundle-devicekit")
 }
 
 flutter {
     source = "../.."
-}
-
-dependencies {
-    val tuyaVersion = "6.11.0"
-
-    // Keep Home SDK + BizBundle BOM aligned.
-    implementation(enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:$tuyaVersion"))
-
-    // Core SDK
-    implementation("com.thingclips.smart:thingsmart:$tuyaVersion")
-
-    // BizBundles actually used in your project
-    implementation("com.thingclips.smart:thingsmart-bizbundle-family")
-    implementation("com.thingclips.smart:thingsmart-bizbundle-device_activator")
-    implementation("com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit")
-
-    // ✅ Critical sign-in fix: package the local security AAR that contains libthing_security_algorithm.so
-    implementation(files("libs/security-algorithm-1.0.0-beta.aar"))
-
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("com.google.android.flexbox:flexbox:3.0.0")
-    implementation("jp.wasabeef:recyclerview-animators:4.0.2")
 }

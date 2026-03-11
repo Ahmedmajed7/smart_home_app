@@ -89,7 +89,7 @@ class TuyaPlatform {
 
     if (res is Map) return Map<dynamic, dynamic>.from(res);
 
-    throw  PlatformException(
+    throw PlatformException(
       code: 'ENSURE_HOME_FAILED',
       message: 'ensureHome returned invalid result',
     );
@@ -146,7 +146,7 @@ class TuyaPlatform {
 
     if (res is Map) return Map<dynamic, dynamic>.from(res);
 
-    throw  PlatformException(
+    throw PlatformException(
       code: 'SUB_DEVICE_PAIR_FAILED',
       message: 'Native pairing returned invalid result',
     );
@@ -154,5 +154,16 @@ class TuyaPlatform {
 
   static Future<void> stopGatewaySubDevicePairing() async {
     await _channel.invokeMethod('stopGatewaySubDevicePairing');
+  }
+
+  // -------------------------
+  // Device panel
+  // -------------------------
+  static Future<void> openDevicePanel({
+    required String devId,
+  }) async {
+    await _channel.invokeMethod('openDevicePanel', {
+      'devId': devId,
+    });
   }
 }
